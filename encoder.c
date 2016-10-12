@@ -69,7 +69,7 @@ char *readData(FILE *input, wav_hdr *header) {
     
     // Mascara utilizada para isolar bits
     char mask = 0x1;
-    int i;
+    unsigned long long int i;
     int currentBitPosition; // Atual posicao do bit dentro de um byte
     int dataBitsPosition = 0; // Posicao no vetor dataBits
     int shift; // Quantidade a ser deslocada na operacao bitshift
@@ -92,8 +92,60 @@ char *readData(FILE *input, wav_hdr *header) {
     return dataBits;
 }
 
+int openFiles(FILE **input, FILE **output, char *inputName, char *outputName) {
+    
+    *input = fopen(inputName, "r");
+    if(*input == NULL) {
+        printf("Could not open wave file %s\n", inputName);
+        return EXIT_FAILURE;
+    }
+    
+    *output = fopen(outputName, "w");
+    if(*output == NULL) {
+        printf("Could not open wave file %s\n", outputName);
+        return EXIT_FAILURE;
+    }
+    
+    return EXIT_SUCCESS;
+}
+
+// AQUI, FALTA IMPLEMENTAR NOSSO PROPRIO HEADER. A IDEIA EH USAR UM CHAR
+// OU UM INT PARA DIZER QUAIS OS TIPOS DE COMPRESSÃO FEITOS. APÓS O HEADER
+// ORIGINAL, ANTES DOS DADOS, COLOCAMOS ESSE NOSSO "HEADER"
+int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size) {
+    // 1 e o numero de elementos a serem escritos. 1 header apenas
+    if(fwrite(header, sizeof(wav_hdr), 1, output)!= 1) {
+        return EXIT_FAILURE;
+    }
+    
+    char *byteData = (char *) malloc(size/BITS_PER_CHAR);
+    unsigned long long int i, j = 0;
+    char currByte = 0;
+    int currBit = 0;
+    int shift;
+    for(i = 0; i < size; i++) {
+        if(currBit == BITS_PER_CHAR) {
+            currBit = 0;
+            byteData[j++] = currByte;
+            currByte = 0;
+        }
+        
+        shift = BITS_PER_CHAR - 1 - currBit++;
+        // Isola o bit do byte e atribui a posicao do vetor dataBits
+        currByte |= data[i] << shift;
+    }
+    
+    if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
+        return EXIT_FAILURE;
+    }
+    
+    free(byteData);
+    
+    return EXIT_SUCCESS;
+}
+
 int main(int argc, char **argv) {
-    FILE *f; // descritor do arquivo de entrada a ser processado
+    FILE *input, *output; // descritores dos arquivos de entrada e saída a ser processado
     int fileSize; // tamanho total do arquivo
     
     if(argc <= 1) {
@@ -101,19 +153,32 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     
-    f = fopen(argv[1], "r");
-    if(f == NULL) {
-        printf("Could not open wave file %s\n", argv[1]);
+    if(openFiles(&input, &output, argv[1], "output.wav")) {
         return EXIT_FAILURE;
     }
     
-    wav_hdr *header = readHeader(f, &fileSize);
+    wav_hdr *header = readHeader(input, &fileSize);
     
-    char *dataBits = readData(f, header);
+    char *dataBits = readData(input, header);
+    unsigned long long int dataBitsSize = header->Subchunk2Size * BITS_PER_CHAR;
 
+    // FAZER AQUI AS CHAMADAS PARA AS CODIFICACOES
+    // PROTOTIPO:
+    // char *codificacaoMetodoX(char *input, char* size, int bitsperSample)
+    // A CADA CHAMADA PARA UM METODO DIFERENTE, ATUALIZAMOS INPUT,
+    // SIZE E BITSPERSAMPLE. NUM PRIMEIRO MOMENTO,
+    // INPUT É dataBits, E SIZE E BITSPERSEAMPLE DIZEM RESPEITO AOS
+    // DADOS DO ARQUIVO DE ENTRADA. DEPOIS, APOS A PRIMEIRA
+    // CODIFICACAO, ESSES DADOS SAO ATUALIZADOS.
+    
+    if(writeToOutput(output, header, dataBits, dataBitsSize)) {
+        return EXIT_FAILURE;
+    }
+    
     free(dataBits);
     free(header);
-    fclose(f);
+    fclose(input);
+    fclose(output);
     
     return EXIT_SUCCESS;
 }
