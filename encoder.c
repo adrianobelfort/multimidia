@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "List.h"
 
 #define BITS_PER_CHAR 8
+
+int applyRunlength;
 
 // *** References ***
 // http://soundfile.sapp.org/doc/WaveFormat/
@@ -24,6 +27,11 @@ typedef struct  WAV_HEADER{
     unsigned int        Subchunk2Size;  // Sampled data length
     
 } wav_hdr;
+
+typedef struct encodeHeader {
+    char encodeType;// 00000DHR (D - Diferença; H - Huffman; R - Runlength)
+    unsigned int runlengthNumBits;
+} enc_hdr;
 
 // Le o header do arquivo .wav e encontra o tamanho do arquivo
 wav_hdr *readHeader(FILE *input, int *fileSize) {
@@ -109,12 +117,100 @@ int openFiles(FILE **input, FILE **output, char *inputName, char *outputName) {
     return EXIT_SUCCESS;
 }
 
+unsigned int findNumBits(unsigned long long int number) {
+    unsigned int bit = sizeof(unsigned long long) * BITS_PER_CHAR - 1;
+    unsigned int mask = 0x1;
+    
+    while(!((number & (mask << bit)) >> bit)) {
+        bit--;
+    }
+    return bit+1;
+}
+
+int convertRunLengthToBits(char *runLengthBits, unsigned long int size, List *runs, unsigned int numBits) {
+    int i = 0, currBit;
+    unsigned long int currRun;
+    Node *aux = runs->head;
+    
+    while(aux) {
+        currRun = aux->data;
+        currBit = 0;
+        while(currRun > 0) {
+            runLengthBits[i + numBits - 1 - currBit] = currRun % 2;
+            currRun /= 2;
+            currBit++;
+        }
+        while(currBit < numBits) {
+            runLengthBits[i + numBits - 1 - currBit] = 0;
+            currBit++;
+        }
+        i += numBits;
+        aux = aux->next;
+    }
+    
+    if(i!=size) {
+        return EXIT_FAILURE;
+    }
+    
+    return EXIT_SUCCESS;
+}
+
+char *runlength(char *data, unsigned long long int size, unsigned long long  int *runlengthSize, unsigned int *numBits) {
+    if(size == 0)
+        return NULL;
+    List *runs = create();
+    unsigned long int maxRun = 1, currentRun = 1;
+    char lastBit = data[0];
+    
+    if(lastBit == 1) {
+        add(0, runs);
+    }
+    unsigned long long int i;
+    for(i = 1; i < size; i++) {
+        if(lastBit != data[i]) {
+            lastBit = data[i];
+            if(currentRun > maxRun) {
+                maxRun = currentRun;
+            }
+            add(currentRun, runs);
+            currentRun = 1;
+        } else {
+            currentRun++;
+        }
+    }
+    
+    if(currentRun != 0) {
+        add(currentRun, runs);
+    }
+    *numBits = findNumBits(maxRun);
+    *runlengthSize = *numBits * runs->size;
+    char *runlengthBits = (char *) malloc(*runlengthSize);
+    convertRunLengthToBits(runlengthBits, *runlengthSize, runs, *numBits);
+    //traverse(runs);
+    clearList(runs);
+    return runlengthBits;
+}
+
 // AQUI, FALTA IMPLEMENTAR NOSSO PROPRIO HEADER. A IDEIA EH USAR UM CHAR
 // OU UM INT PARA DIZER QUAIS OS TIPOS DE COMPRESSÃO FEITOS. APÓS O HEADER
 // ORIGINAL, ANTES DOS DADOS, COLOCAMOS ESSE NOSSO "HEADER"
-int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size) {
+int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size, unsigned int runlengthNumBits) {
+    
+    enc_hdr encodeHeader;
+    encodeHeader.encodeType = 0;
+    encodeHeader.runlengthNumBits = 0;
+    if(applyRunlength) {
+        encodeHeader.encodeType |= 0x1;
+        encodeHeader.runlengthNumBits = runlengthNumBits;
+    }
+    
     // 1 e o numero de elementos a serem escritos. 1 header apenas
     if(fwrite(header, sizeof(wav_hdr), 1, output)!= 1) {
+        return EXIT_FAILURE;
+    }
+    
+    // 1 e o numero de elementos a serem escritos. 1 encode header apenas
+    if(fwrite(&encodeHeader, sizeof(enc_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
     
@@ -145,8 +241,15 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
 }
 
 int main(int argc, char **argv) {
-    FILE *input, *output; // descritores dos arquivos de entrada e saída a ser processado
+    FILE *input = NULL, *output = NULL; // descritores dos arquivos de entrada e saída a ser processado
     int fileSize; // tamanho total do arquivo
+    
+    /*******/
+    applyRunlength = 1;// VARIAVEL AUXILIAR PARA DETERMINAR
+    // QUANDO RUNLENGTH DEVE SER USADO. MUDAR DE ACORDO COM A
+    // LOGICA DO DRIKA.
+    /*******/
+
     
     if(argc <= 1) {
         printf("Usage: ./wave_reader file.wav\n");
@@ -161,6 +264,8 @@ int main(int argc, char **argv) {
     
     char *dataBits = readData(input, header);
     unsigned long long int dataBitsSize = header->Subchunk2Size * BITS_PER_CHAR;
+    unsigned long long int runlengthSize;
+    unsigned int runlengthNumBits = 0;
 
     // FAZER AQUI AS CHAMADAS PARA AS CODIFICACOES
     // PROTOTIPO:
@@ -171,7 +276,15 @@ int main(int argc, char **argv) {
     // DADOS DO ARQUIVO DE ENTRADA. DEPOIS, APOS A PRIMEIRA
     // CODIFICACAO, ESSES DADOS SAO ATUALIZADOS.
     
-    if(writeToOutput(output, header, dataBits, dataBitsSize)) {
+    if(applyRunlength) {
+        char *runlengthBits = runlength(dataBits, dataBitsSize, &runlengthSize, &runlengthNumBits);
+        free(dataBits);
+        dataBits = runlengthBits;
+        dataBitsSize = runlengthSize;
+    }
+    
+    
+    if(writeToOutput(output, header, dataBits, dataBitsSize, runlengthNumBits)) {
         return EXIT_FAILURE;
     }
     
