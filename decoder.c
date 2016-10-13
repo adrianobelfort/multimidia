@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "List.h"
 
 #define BITS_PER_CHAR 8
+#define RUNLENGTH_MASK 0x1
+#define HUFFMAN_MASK 0x2
+#define DIFFERENCE_MASK 0x4
 
 int applyRunlength;
 
@@ -59,22 +61,36 @@ wav_hdr *readHeader(FILE *input, int *fileSize) {
     return header;
 }
 
-char *readData(FILE *input, wav_hdr *header) {
+enc_hdr *readEncodeHeader(FILE *input) {
+    enc_hdr* header = (enc_hdr *) malloc(sizeof(enc_hdr));
+    
+    fseek(input, sizeof(wav_hdr), SEEK_SET);
+    
+    fread(header, sizeof(enc_hdr), 1, input);
+    
+    printf("Encode Mode: %d\n", header->encodeType);
+    printf("RunlengthNumBits: %u\n", header->runlengthNumBits);
+    printf("TotalLength: %llu\n", header->totalLength);
+    
+    return header;
+}
+
+char *readData(FILE *input, wav_hdr *header, enc_hdr *encodeHeader) {
     
     // Aloca um vetor de chars, sendo que cada um representa um bit.
     // Por isso o tamanho é Subchunk2Size * BITS_PER_CHAR, já que
     // um char tem um byte.
-    char *dataBits = (char *) malloc(header->Subchunk2Size * BITS_PER_CHAR);
+    char *dataBits = (char *) malloc(encodeHeader->totalLength * BITS_PER_CHAR);
     
     // Vetor dos bytes lidos originalmente do arquivo
-    char *originalData = (char *) malloc(header->Subchunk2Size);
+    char *originalData = (char *) malloc(encodeHeader->totalLength);
     
     // Prepara o offset para leitura dos dados do arquivo,
     // pulando o header
-    fseek(input, sizeof(wav_hdr), SEEK_SET);
+    fseek(input, sizeof(wav_hdr)+sizeof(enc_hdr), SEEK_SET);
     
     
-    fread(originalData, header->Subchunk2Size, 1, input);
+    fread(originalData, encodeHeader->totalLength, 1, input);
     
     // Mascara utilizada para isolar bits
     char mask = 0x1;
@@ -84,7 +100,7 @@ char *readData(FILE *input, wav_hdr *header) {
     int shift; // Quantidade a ser deslocada na operacao bitshift
     
     // Para todos os bytes lidos do arquivo
-    for(i = 0; i < header->Subchunk2Size; i++) {
+    for(i = 0; i < encodeHeader->totalLength; i++) {
         // Seleciona o byte atual
         char currValue = originalData[i];
         // Inicializa a posicao de bit no byte atual
@@ -99,7 +115,6 @@ char *readData(FILE *input, wav_hdr *header) {
     }
     
     free(originalData);
-    
     return dataBits;
 }
 
@@ -130,101 +145,83 @@ unsigned int findNumBits(unsigned long long int number) {
     return bit+1;
 }
 
-int convertRunLengthToBits(char *runLengthBits, unsigned long int size, List *runs, unsigned int numBits) {
-    int i = 0, currBit;
-    unsigned long int currRun;
-    Node *aux = runs->head;
+char *convertRunLengthToBits(unsigned long long int totalBitsLength, unsigned long long int *samples, unsigned long int numberSamples) {
     
-    while(aux) {
-        currRun = aux->data;
-        currBit = 0;
-        while(currRun > 0) {
-            runLengthBits[i + numBits - 1 - currBit] = currRun % 2;
-            currRun /= 2;
-            currBit++;
+    char *runLengthBits = (char *) malloc(totalBitsLength);
+    
+    unsigned long int i;
+    unsigned long long int j, offset = 0;
+    unsigned int current = 0;
+    
+//    for(i = 0; i < numberSamples; i++) {
+//        printf("\nSample %lu - %llu\n", i, samples[i]);
+//    }
+    
+    for(i = 0; i < numberSamples; i++) {
+        for(j = 0; j < samples[i]; j++) {
+            runLengthBits[offset + j] = current;
         }
-        while(currBit < numBits) {
-            runLengthBits[i + numBits - 1 - currBit] = 0;
-            currBit++;
-        }
-        i += numBits;
-        aux = aux->next;
+        
+        offset += j;
+        
+        if(current == 1)
+            current = 0;
+        else
+            current = 1;
     }
     
-    if(i!=size) {
-        return EXIT_FAILURE;
-    }
-    
-    return EXIT_SUCCESS;
+    return runLengthBits;
 }
 
-char *runlength(char *data, unsigned long long int size, unsigned long long  int *runlengthSize, unsigned int *numBits) {
-    if(size == 0)
-        return NULL;
-    List *runs = create();
-    unsigned long int maxRun = 1, currentRun = 1;
-    char lastBit = data[0];
+
+
+char *runlength(char *data, unsigned long long int size, unsigned int numBits, unsigned long long int *totalBitsLength) {
     
-    if(lastBit == 1) {
-        add(0, runs);
-    }
-    
-    //printf("\n\n\nOriginal Size: %llu\n\n\n", size);
     unsigned long long int i;
-    for(i = 1; i < size; i++) {
-        if(lastBit != data[i]) {
-            lastBit = data[i];
-            if(currentRun > maxRun) {
-                maxRun = currentRun;
-            }
-            add(currentRun, runs);
-            currentRun = 1;
-        } else {
-            currentRun++;
+    unsigned long long int numberSamples = size/numBits;
+    printf("\n\n\nnumSamples - %llu\nSize - %llu\nnumbits - %u\n\n\n", numberSamples, size, numBits);
+    unsigned int currBit = 0, j = 0, shift;
+    unsigned long long int currValue = 0;
+    *totalBitsLength = 0;
+    
+    //printf("\n\n\nsize: %llu\n\n\nnumbits: %u\n\n\n", size, numBits);
+    
+    unsigned long long int *runlengthSamples = (unsigned long long int *) malloc(numberSamples*sizeof(unsigned long long int));
+    
+    //printf("\n\ncurrValue: %llu\n\n", currValue);
+    for(i = 0; i < size; i++) {
+        if(currBit == numBits)
+        {
+            //printf("\n\ncurrValue: %llu\n\n", currValue);
+            *totalBitsLength += currValue;
+            runlengthSamples[j++] = currValue;
+            currBit = 0;
+            currValue = 0;
         }
+        
+        shift = numBits - 1 - currBit++;
+        //printf("\n\ncurrBit: %u\n\n", currBit);
+        currValue |= data[i] << shift;
     }
     
-    if(currentRun != 0) {
-        add(currentRun, runs);
+    if(currValue != 0) {
+        runlengthSamples[j++] = currValue;
+        *totalBitsLength += currValue;
     }
     
-    //printf("\n\n\nOriginal i: %llu\n\n\n", i);
+    //printf("\n\n\n%llu\n\n\n", *totalBitsLength * sizeof(char));
+    char *dataBits = convertRunLengthToBits(*totalBitsLength * sizeof(char), runlengthSamples, numberSamples);
     
-    *numBits = findNumBits(maxRun);
-    *runlengthSize = *numBits * runs->size;
-    
-    printf("\n\nnumbits: %d - size: %llu\nlist: %lu - max: %lu\n\n", *numBits, *runlengthSize, runs->size, maxRun);
-    char *runlengthBits = (char *) malloc(*runlengthSize);
-    if(convertRunLengthToBits(runlengthBits, *runlengthSize, runs, *numBits)) {
-        free(runlengthBits);
-        return NULL;
-    }
-//    traverse(runs);
-    clearList(runs);
-    return runlengthBits;
+    return dataBits;
 }
 
 // AQUI, FALTA IMPLEMENTAR NOSSO PROPRIO HEADER. A IDEIA EH USAR UM CHAR
 // OU UM INT PARA DIZER QUAIS OS TIPOS DE COMPRESSÃO FEITOS. APÓS O HEADER
 // ORIGINAL, ANTES DOS DADOS, COLOCAMOS ESSE NOSSO "HEADER"
-int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size, unsigned int runlengthNumBits) {
-    
-    enc_hdr encodeHeader;
-    encodeHeader.encodeType = 0;
-    encodeHeader.runlengthNumBits = 0;
-    if(applyRunlength) {
-        encodeHeader.encodeType |= 0x1;
-        encodeHeader.runlengthNumBits = runlengthNumBits;
-        encodeHeader.totalLength = size/BITS_PER_CHAR;
-    }
+int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size) {
     
     // 1 e o numero de elementos a serem escritos. 1 header apenas
     if(fwrite(header, sizeof(wav_hdr), 1, output)!= 1) {
-        return EXIT_FAILURE;
-    }
-
-    // 1 e o numero de elementos a serem escritos. 1 encode header apenas
-    if(fwrite(&encodeHeader, sizeof(enc_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
     
@@ -251,7 +248,7 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
     if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-    
+    //printf("\n\n\nJ FINAL - %llu\n\n\nSIZE - %llu\n\n\n", j, size);
     free(byteData);
     
     return EXIT_SUCCESS;
@@ -266,24 +263,24 @@ int main(int argc, char **argv) {
     // QUANDO RUNLENGTH DEVE SER USADO. MUDAR DE ACORDO COM A
     // LOGICA DO DRIKA.
     /*******/
-
+    
     
     if(argc <= 1) {
         printf("Usage: ./wave_reader file.wav\n");
         return EXIT_FAILURE;
     }
     
-    if(openFiles(&input, &output, argv[1], "output.wav")) {
+    if(openFiles(&input, &output, argv[1], "decompressed.wav")) {
         return EXIT_FAILURE;
     }
     
     wav_hdr *header = readHeader(input, &fileSize);
+    enc_hdr *encode_header = readEncodeHeader(input);
     
-    char *dataBits = readData(input, header);
-    unsigned long long int dataBitsSize = header->Subchunk2Size * BITS_PER_CHAR;
-    unsigned long long int runlengthSize;
-    unsigned int runlengthNumBits = 0;
-
+    char *dataBits = readData(input, header, encode_header);
+    unsigned long long int dataBitsSize;
+    unsigned long long int runlengthBitsSize;
+    
     // FAZER AQUI AS CHAMADAS PARA AS CODIFICACOES
     // PROTOTIPO:
     // char *codificacaoMetodoX(char *input, char* size, int bitsperSample)
@@ -293,22 +290,21 @@ int main(int argc, char **argv) {
     // DADOS DO ARQUIVO DE ENTRADA. DEPOIS, APOS A PRIMEIRA
     // CODIFICACAO, ESSES DADOS SAO ATUALIZADOS.
     
-    if(applyRunlength) {
-        char *runlengthBits = runlength(dataBits, dataBitsSize, &runlengthSize, &runlengthNumBits);
-        if(!runlengthBits)
-            return EXIT_FAILURE;
+    if(encode_header->encodeType & RUNLENGTH_MASK) {
+        dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
+        char *runlengthDecoded = runlength(dataBits, dataBitsSize, encode_header->runlengthNumBits, &runlengthBitsSize);
         free(dataBits);
-        dataBits = runlengthBits;
-        dataBitsSize = runlengthSize;
+        dataBits = runlengthDecoded;
+        dataBitsSize = runlengthBitsSize;
     }
     
-    
-    if(writeToOutput(output, header, dataBits, dataBitsSize, runlengthNumBits)) {
+    if(writeToOutput(output, header, dataBits, dataBitsSize)) {
         return EXIT_FAILURE;
     }
     
     free(dataBits);
     free(header);
+    free(encode_header);
     fclose(input);
     fclose(output);
     
