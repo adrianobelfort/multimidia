@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/********************** ORGANIZAÇÃO ESTRUTURAL DOS DADOS **********************/
+
 typedef struct
 {
 	int size;
@@ -14,6 +16,8 @@ typedef struct
 } Chunk;
 
 #define BITS_PER_BYTE 8
+
+/********************** MANIPULAÇÃO DE AMOSTRAS **********************/
 
 void initializeSample(Sample* sample, int bitsPerSample)
 {
@@ -30,6 +34,86 @@ void populateSample(Sample* sample, char* data)
 		sample->data[i] = data[i];
 	}
 }
+
+void copySample(Sample *destination, Sample *source)
+{
+	initializeSample(destination, source->size);
+	populateSample(destination, source->data);
+}
+
+void destroySample(Sample* sample)
+{
+	free(sample->data);
+}
+
+Sample* newSample(int bitsPerSample)
+{
+	Sample* sample = (Sample*) malloc(sizeof(Sample));
+	initializeSample(sample, bitsPerSample);
+	return sample;
+}
+
+void killSample(Sample* sample)
+{
+	destroySample(sample);
+	free(sample);
+}
+
+/********************* MANIPULAÇÃO DE BLOCOS DE AMOSTRAS *********************/
+
+void initializeChunk(Chunk* chunk, int capacity)
+{
+	chunk->size = capacity;
+	chunk->samples = (Sample*) malloc(capacity * sizeof(Sample));
+}
+
+void copyChunk(Chunk *destination, Chunk* source)
+{
+	int i;
+
+	initializeChunk(destination, source->size);
+	for (i = 0; i < source->size; i++)
+	{
+		copySample(&destination->samples[i], &source->samples[i]);
+	}
+}
+
+void destroyChunk(Chunk* chunk)
+{
+	int i;
+
+	for (i = 0; i < chunk->size; i++)
+	{
+		destroySample(&chunk->samples[i]);
+	}
+
+	free(chunk->samples);
+}
+
+Chunk* newChunk(int capacity)
+{
+	Chunk* chunk = (Chunk*) malloc(sizeof(Chunk));
+
+	initializeChunk(chunk, capacity);
+
+	return chunk;
+}
+
+void killChunk(Chunk* chunk)
+{
+	destroyChunk(chunk);
+	free(chunk);
+}
+
+/********************** MISCELÂNEA **********************/
+
+void assign(Sample* destination, Sample* source)
+{
+	free(destination->data);
+	destination->data = source->data;
+}
+
+/********************** CONVERSÕES E IMPRESSÃO COM BITS **********************/
 
 int32_t niceNumber(char* sample, int n)
 {
@@ -74,74 +158,6 @@ void printBits(char* stream, int n, int bitsPerSample)
 		}
 		printf(" ");
 	}
-}
-
-void copySample(Sample *destination, Sample *source)
-{
-	initializeSample(destination, source->size);
-	populateSample(destination, source->data);
-}
-
-void destroySample(Sample* sample)
-{
-	free(sample->data);
-}
-
-Sample* newSample(int bitsPerSample)
-{
-	Sample* sample = (Sample*) malloc(sizeof(Sample));
-	initializeSample(sample, bitsPerSample);
-	return sample;
-}
-
-void killSample(Sample* sample)
-{
-	destroySample(sample);
-	free(sample);
-}
-
-void initializeChunk(Chunk* chunk, int capacity)
-{
-	chunk->size = capacity;
-	chunk->samples = (Sample*) malloc(capacity * sizeof(Sample));
-}
-
-void copyChunk(Chunk *destination, Chunk* source)
-{
-	int i;
-
-	initializeChunk(destination, source->size);
-	for (i = 0; i < source->size; i++)
-	{
-		copySample(&destination->samples[i], &source->samples[i]);
-	}
-}
-
-void destroyChunk(Chunk* chunk)
-{
-	int i;
-
-	for (i = 0; i < chunk->size; i++)
-	{
-		destroySample(&chunk->samples[i]);
-	}
-
-	free(chunk->samples);
-}
-
-Chunk* newChunk(int capacity)
-{
-	Chunk* chunk = (Chunk*) malloc(sizeof(Chunk));
-
-	initializeChunk(chunk, capacity);
-
-	return chunk;
-}
-
-void killChunk(Chunk* chunk)
-{
-	destroyChunk(chunk);
-	free(chunk);
 }
 
 Sample bitsToSample(int bitsPerSample, char* bits)
@@ -239,29 +255,7 @@ void printChunk(Chunk chunk)
 	}
 }
 
-/*Chunk bitsToSamples(int bitsPerSample, char* bits, int n)
-{
-	int i, numberOfSamples;
-	Chunk chunk;
-	Sample sample;
-
-	numberOfSamples = n / bitsPerSample;
-	initializeChunk(&chunk, numberOfSamples);
-
-	for (i = 0; i < numberOfSamples; i++)
-	{
-		initializeSample(&sample, bitsPerSample);
-
-		for (j = 0; j < bitsPerSample; j++)
-		{
-			sample.data[j] = bits[i * numberOfSamples + j];
-		}
-
-		chunk.samples[i] = sample;
-	}
-
-	return chunk;
-}*/
+/********************** ARITMÉTICA BOOLEANA **********************/
 
 int sumBits(char* a, char* b, char* result, int n)
 {
@@ -285,19 +279,19 @@ int sumBits(char* a, char* b, char* result, int n)
 	return carry; // indica overflow
 }
 
-char* invert(char* number, int n)
+char* negate(char* number, int n)
 {
 	int i;
-	char* invertedNumber;
+	char* negatedNumber;
 
-	invertedNumber = (char*) malloc(n * sizeof(char));
+	negatedNumber = (char*) malloc(n * sizeof(char));
 
 	for (i = 0; i < n; i++)
 	{
-		invertedNumber[i] = ~number[i] & 0x01;
+		negatedNumber[i] = ~number[i] & 0x01;
 	}
 
-	return invertedNumber;
+	return negatedNumber;
 }
 
 int sumOne(char* number, int n)
@@ -353,20 +347,20 @@ Chunk convertChunkToSigned(Chunk chunk)
 
 Sample signedDifference(Sample a, Sample b)
 {
-	char *invertedB, *result;
+	char *negatedB, *result;
 	int size = b.size;
 	Sample differenceSample;
 
-	invertedB = invert(b.data, b.size);
-	result = invertedB; // sim, reusamos o vetor B invertido
-	sumOne(invertedB, size);
+	negatedB = negate(b.data, b.size);
+	result = negatedB; // sim, reusamos o vetor B invertido
+	sumOne(negatedB, size);
 
-	sumBits(a.data, invertedB, result, size);
+	sumBits(a.data, negatedB, result, size);
 
 	initializeSample(&differenceSample, size);
 	populateSample(&differenceSample, result);
 
-	free(invertedB);
+	free(negatedB);
 	return differenceSample;
 }
 
@@ -434,12 +428,6 @@ Chunk computeDifference(Chunk chunk)
 	return differenceChunk;
 }
 
-void assign(Sample* destination, Sample* source)
-{
-	free(destination->data);
-	destination->data = source->data;
-}
-
 Chunk computeSum(Chunk chunk)
 {
 	int i, size;
@@ -457,6 +445,8 @@ Chunk computeSum(Chunk chunk)
 
 	return sumChunk;
 }
+
+/********************** CODIFICAÇÃO **********************/
 
 char* differentialEncoding(char* stream, int n, int bitsPerSample)
 {
@@ -481,6 +471,8 @@ char* differentialEncoding(char* stream, int n, int bitsPerSample)
 	return encodedStream;
 }
 
+/********************** DECODIFICAÇÃO **********************/
+
 char* differentialDecoding(char* stream, int n, int bitsPerSample)
 {
 	Chunk streamChunk, sumChunk;
@@ -502,6 +494,8 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 
 	return decodedStream;
 }
+
+/********************** PROGRAMA PRINCIPAL **********************/
 
 int main(int argc, char* argv[])
 {
