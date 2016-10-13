@@ -60,6 +60,22 @@ void nicePrint(char* sample, int n)
 	printf("%d", number);
 }
 
+void printBits(char* stream, int n, int bitsPerSample)
+{
+	int i, j, samples;
+
+	samples = n / bitsPerSample;
+
+	for (i = 0; i < samples; i++)
+	{
+		for (j = 0; j < bitsPerSample; j++)
+		{
+			printf("%d", stream[i * bitsPerSample + j]);
+		}
+		printf(" ");
+	}
+}
+
 void copySample(Sample *destination, Sample *source)
 {
 	initializeSample(destination, source->size);
@@ -88,6 +104,17 @@ void initializeChunk(Chunk* chunk, int capacity)
 {
 	chunk->size = capacity;
 	chunk->samples = (Sample*) malloc(capacity * sizeof(Sample));
+}
+
+void copyChunk(Chunk *destination, Chunk* source)
+{
+	int i;
+
+	initializeChunk(destination, source->size);
+	for (i = 0; i < source->size; i++)
+	{
+		copySample(&destination->samples[i], &source->samples[i]);
+	}
 }
 
 void destroyChunk(Chunk* chunk)
@@ -134,7 +161,7 @@ Chunk bitsToChunk(int bitsPerSample, char* bits, int n)
 
 	numberOfSamples = n / bitsPerSample;
 
-	printf("Samples: %d, bits per sample %d\n", numberOfSamples, bitsPerSample);
+	//printf("Samples: %d, bits per sample %d\n", numberOfSamples, bitsPerSample);
 
 	initializeChunk(&chunk, numberOfSamples);
 
@@ -145,6 +172,44 @@ Chunk bitsToChunk(int bitsPerSample, char* bits, int n)
 	}
 
 	return chunk;
+}
+
+char* sampleToBits(Sample sample)
+{
+	char* streamline;
+	int i;
+
+	streamline = (char*) malloc(sample.size * sizeof(char));
+	for (i = 0; i < sample.size; i++)
+	{
+		streamline[i] = sample.data[i];
+	}
+
+	return streamline;
+}
+
+char* chunkToBits(Chunk chunk)
+{
+	long int slots = 0;
+	int i, j, k = 0;
+	char *stream, *sampleStream;
+
+	for (i = 0; i < chunk.size; i++)
+	{
+		slots += chunk.samples[i].size;
+	}
+
+	stream = (char*) malloc(slots * sizeof(char));
+
+	for (i = 0; i < chunk.size; i++)
+	{
+		for(j = 0; j < chunk.samples[i].size; j++)
+		{
+			stream[k++] = chunk.samples[i].data[j];
+		}
+	}
+
+	return stream;
 }
 
 void printSample(Sample sample)
@@ -198,12 +263,12 @@ void printChunk(Chunk chunk)
 	return chunk;
 }*/
 
-int sum(char* a, char* b, char* result, int n)
+int sumBits(char* a, char* b, char* result, int n)
 {
 	int i;
 	char carry = 0, and, xor;
 
-	//printf("A is %d, B is %d\n", niceNumber(a,n), niceNumber(b,n));
+	//printf("\nA is %d, B is %d\n", niceNumber(a,n), niceNumber(b,n));
 
 	for (i = n-1; i >= 0; i--)
 	{
@@ -214,7 +279,6 @@ int sum(char* a, char* b, char* result, int n)
 
 		result[i] = xor ^ carry;
 		//printf("Carry is %d\n", carry);
-		// carry = and | xor;
 		carry = (carry & xor) | and;
 	}
 
@@ -297,7 +361,7 @@ Sample signedDifference(Sample a, Sample b)
 	result = invertedB; // sim, reusamos o vetor B invertido
 	sumOne(invertedB, size);
 
-	sum(a.data, invertedB, result, size);
+	sumBits(a.data, invertedB, result, size);
 
 	initializeSample(&differenceSample, size);
 	populateSample(&differenceSample, result);
@@ -322,7 +386,7 @@ Sample difference(Sample a, Sample b)
 	int size;
 	Sample differenceSample;
 
-	if (a.size != b.size) printf("Warning: a and b sizes do not match.\n");
+	if (a.size != b.size) printf("[Difference] Warning: a and b sizes do not match.\n");
 
 	size = a.size;
 
@@ -336,6 +400,21 @@ Sample difference(Sample a, Sample b)
 	}
 
 	return differenceSample;
+}
+
+Sample sum(Sample a, Sample b)
+{
+	int size;
+	Sample sumSample;
+
+	if (a.size != b.size) printf("[Sum] Warning: a and b sizes do not match.\n");
+	size = a.size;
+
+	initializeSample(&sumSample, size);
+
+	sumBits(a.data, b.data, sumSample.data, size);
+
+	return sumSample;
 }
 
 Chunk computeDifference(Chunk chunk)
@@ -355,28 +434,98 @@ Chunk computeDifference(Chunk chunk)
 	return differenceChunk;
 }
 
-void differenceEncoding(char* stream, int n, int bitsPerSample)
+void assign(Sample* destination, Sample* source)
+{
+	free(destination->data);
+	destination->data = source->data;
+}
+
+Chunk computeSum(Chunk chunk)
+{
+	int i, size;
+	Chunk sumChunk;
+	Sample sumResult;
+
+	size = chunk.size;
+
+	copyChunk(&sumChunk, &chunk);
+	for (i = 1; i < size; i++)
+	{
+		sumResult = sum(sumChunk.samples[i], sumChunk.samples[i-1]);
+		assign(&sumChunk.samples[i], &sumResult);
+	}
+
+	return sumChunk;
+}
+
+char* differentialEncoding(char* stream, int n, int bitsPerSample)
 {
 	Chunk streamChunk, differenceChunk;
+	char* encodedStream;
 
 	streamChunk = bitsToChunk(bitsPerSample, stream, n);
 
 	printf("Before encoding\n");
 	printChunk(streamChunk);
+
 	differenceChunk = computeDifference(streamChunk);
 
 	printf("\nAfter encoding\n");
 	printChunk(differenceChunk);
 
+	encodedStream = chunkToBits(differenceChunk);
+
 	destroyChunk(&streamChunk);
 	destroyChunk(&differenceChunk);
-	// converter para bits aqui
+
+	return encodedStream;
+}
+
+char* differentialDecoding(char* stream, int n, int bitsPerSample)
+{
+	Chunk streamChunk, sumChunk;
+	char* decodedStream;
+
+	streamChunk = bitsToChunk(bitsPerSample, stream, n);
+
+	printf("Before decoding\n");
+	printChunk(streamChunk);
+	sumChunk = computeSum(streamChunk);
+
+	printf("\nAfter decoding\n");
+	printChunk(sumChunk);
+
+	decodedStream = chunkToBits(sumChunk);
+
+	destroyChunk(&streamChunk);
+	destroyChunk(&sumChunk);
+
+	return decodedStream;
 }
 
 int main(int argc, char* argv[])
 {
 	char sample[] = {0,1,0,1, 0,0,1,1, 0,1,0,0, 0,1,0,1, 0,1,1,1}; //5,3,4,5,7
-	differenceEncoding(sample, 5*4, 4);
+	char *differentialSamples, *rebuiltSamples;
+	int i;
 
+	printf("Original bits: ");
+	printBits(sample, 5*4, 4);
+	printf("\n\n");
+
+	differentialSamples = differentialEncoding(sample, 5*4, 4);
+
+	printf("\nEncoded bits: ");
+	printBits(differentialSamples, 5*4, 4);
+	printf("\n\n");
+
+	rebuiltSamples = differentialDecoding(differentialSamples, 5*4, 4);
+
+	printf("\nRebuilt bits: ");
+	printBits(rebuiltSamples, 5*4, 4);
+	printf("\n\n");
+
+	free(differentialSamples);
+	free(rebuiltSamples);
 	return 0;
 }
