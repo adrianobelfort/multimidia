@@ -15,6 +15,8 @@ typedef struct
 	Sample* samples;
 } Chunk;
 
+#define POSITIVE 0
+#define NEGATIVE 1
 #define BITS_PER_BYTE 8
 
 /********************** MANIPULAÇÃO DE AMOSTRAS **********************/
@@ -67,6 +69,16 @@ void initializeChunk(Chunk* chunk, int capacity)
 	chunk->samples = (Sample*) malloc(capacity * sizeof(Sample));
 }
 
+void populateChunk(Chunk* chunk, Sample* samples)
+{
+	int i;
+
+	for (i = 0; i < chunk->size; i++)
+	{
+		chunk->samples[i] = samples[i];
+	}
+}
+
 void copyChunk(Chunk *destination, Chunk* source)
 {
 	int i;
@@ -113,23 +125,40 @@ void assign(Sample* destination, Sample* source)
 	destination->data = source->data;
 }
 
+char* copyBits(char* bits, int n)
+{
+	char* copy;
+	int i;
+
+	copy = (char*) malloc(n * sizeof(char));
+
+	for (i = 0; i < n; i++)
+	{
+		copy[i] = bits[i];
+	}
+
+	return copy;
+}
+
 /********************** CONVERSÕES E IMPRESSÃO COM BITS **********************/
 
 int32_t niceNumber(char* sample, int n)
 {
 	int32_t number = 0;
-	int i, limit;
+	int i, limit, maxOffset;
+
+	maxOffset = sizeof(number) * BITS_PER_BYTE;
 
 	limit = n-1;
 
-	for (i = 0; i < n; i++)
+	for (i = 0; i < n && i < maxOffset; i++)
 	{
 		number |= ((int32_t) sample[limit - i]) << i;
 	}
 
 	if (sample[0] == 1)
 	{
-		for (i = n; i < BITS_PER_BYTE * sizeof(int32_t); i++)
+		for (i = n; i < BITS_PER_BYTE * sizeof(number); i++)
 		{
 			number |= ((int32_t) 0x1) << i;
 		}
@@ -253,6 +282,46 @@ void printChunk(Chunk chunk)
 		printf("[%d] ", i);
 		printSample(chunk.samples[i]);
 	}
+}
+
+char* numberToBits(int32_t number, int bits)
+{
+	int i, size, limit, maxOffset;
+	char* numberBits;
+
+	maxOffset = sizeof(number) * BITS_PER_BYTE;
+	size = bits;
+	limit = size - 1;
+
+	numberBits = (char*) calloc(bits, sizeof(char));
+
+	//printf("[Number to bits]\n");
+	//printf("Number in hex: %x\n", number);
+
+	for (i = 0; i < bits && i < maxOffset; i++)
+	{
+		//if (limit-i == 0) printf("MSB: %d\n", (number >> i) & 0x1);
+		numberBits[limit-i] = (char)((number >> i) & 0x1);
+	}
+
+	while (i < bits)
+	{
+		//printf("I'm stuck here :(\n");
+		numberBits[limit-i] = numberBits[bits - maxOffset];
+		i++;
+	}
+
+	return numberBits;
+}
+
+Sample numberToSample(int32_t number, int bitsPerSample)
+{
+	Sample sample;
+	initializeSample(&sample, bitsPerSample);
+
+	sample.data = numberToBits(number, bitsPerSample);
+
+	return sample;
 }
 
 /********************** ARITMÉTICA BOOLEANA **********************/
@@ -446,6 +515,59 @@ Chunk computeSum(Chunk chunk)
 	return sumChunk;
 }
 
+/************************** UTILITÁRIAS **************************/
+
+int minimumSizeInBits(char* number, int n)
+{
+	int i, size, bits;
+	char* absoluteNumber, sign;
+
+	size = n-1;
+	bits = 0;
+
+	sign = number[0];
+
+	if (sign == POSITIVE)
+	{
+		absoluteNumber = copyBits(number+1, n-1);
+	}
+	else if (sign == NEGATIVE)
+	{
+		absoluteNumber = negate(number+1, n-1);
+	}
+
+	for (i = 0; i < size && absoluteNumber[i] != 1; i++);
+
+	bits = n-i;
+
+	free(absoluteNumber);
+
+	return bits;
+}
+
+int minimumSampleSizeInBits(Sample sample)
+{
+	return minimumSizeInBits(sample.data, sample.size);
+}
+
+int minimumRepresentationSizeInBits(Chunk chunk)
+{
+	int i, minimumRepresentation, representation;
+
+	minimumRepresentation = minimumSampleSizeInBits(chunk.samples[0]);
+	for (i = 1; i < chunk.size; i++)
+	{
+		representation = minimumSampleSizeInBits(chunk.samples[i]);
+
+		if (representation > minimumRepresentation)
+		{
+			minimumRepresentation = representation;
+		}
+	}
+
+	return minimumRepresentation;
+}
+
 /********************** CODIFICAÇÃO **********************/
 
 char* differentialEncoding(char* stream, int n, int bitsPerSample)
@@ -497,11 +619,10 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 
 /********************** PROGRAMA PRINCIPAL **********************/
 
-int main(int argc, char* argv[])
+void testA()
 {
-	char sample[] = {0,1,0,1, 0,0,1,1, 0,1,0,0, 0,1,0,1, 0,1,1,1}; //5,3,4,5,7
+	char sample[] = {0,1,0,1, 0,0,1,1, 0,1,0,0, 0,1,0,1, 0,1,1,1};  //5,3,4,5,7
 	char *differentialSamples, *rebuiltSamples;
-	int i;
 
 	printf("Original bits: ");
 	printBits(sample, 5*4, 4);
@@ -521,5 +642,131 @@ int main(int argc, char* argv[])
 
 	free(differentialSamples);
 	free(rebuiltSamples);
+}
+
+void testB()
+{
+	char* differentialSamples, *rebuiltSamples;
+	int n, bits, i, sample, representation;
+	Chunk stream, encodedStream, decodedStream;
+	Sample streamSample;
+
+	printf("Enter the number of samples you want to use: ");
+	scanf("%d", &n);
+	printf("Enter the maximum number of bits to represent each (unsigned) value: ");
+	scanf("%d", &bits);
+	printf("\n");
+
+	initializeChunk(&stream, n);
+
+	for (i = 0; i < n; i++)
+	{
+		printf("Sample %d: ", i);
+		scanf("%d", &sample);
+
+		streamSample = numberToSample(sample, bits+1);
+		stream.samples[i] = streamSample;
+	}
+	printf("\n");
+
+	printf("Original data:\n");
+	printChunk(stream);
+	printf("\n");
+
+	printf("Encoding the samples...\n");
+
+	encodedStream = computeDifference(stream);
+
+	printf("Encoded data:\n");
+	printChunk(encodedStream);
+	printf("\n");
+
+	representation = minimumRepresentationSizeInBits(encodedStream);
+	printf("The encoded data can be represented using %d bits.\n\n", representation);
+
+	printf("Decoding the samples...\n");
+
+	decodedStream = computeSum(encodedStream);
+
+	printf("Decoded data:\n");
+	printChunk(decodedStream);
+
+	destroyChunk(&stream);
+	destroyChunk(&encodedStream);
+	destroyChunk(&decodedStream);
+}
+
+void testC()
+{
+	char* differentialSamples, *rebuiltSamples;
+	int n, bits, i, sample, representation;
+	Chunk stream, encodedStream, decodedStream, doubleEncoded, doubleDecoded;
+	Sample streamSample;
+
+	printf("Enter the number of samples you want to use: ");
+	scanf("%d", &n);
+	printf("Enter the maximum number of bits to represent each (unsigned) value: ");
+	scanf("%d", &bits);
+	printf("\n");
+
+	initializeChunk(&stream, n);
+
+	for (i = 0; i < n; i++)
+	{
+		printf("Sample %d: ", i);
+		scanf("%d", &sample);
+
+		streamSample = numberToSample(sample, bits+1);
+		stream.samples[i] = streamSample;
+	}
+	printf("\n");
+
+	printf("Original data:\n");
+	printChunk(stream);
+	printf("\n");
+
+	printf("Encoding the samples...\n");
+
+	encodedStream = computeDifference(stream);
+
+	printf("Encoded data:\n");
+	printChunk(encodedStream);
+	printf("\n");
+
+	representation = minimumRepresentationSizeInBits(encodedStream);
+	printf("The encoded data can be represented using %d bits.\n\n", representation);
+
+	doubleEncoded = computeDifference(encodedStream);
+
+	printf("Double encoded data:\n");
+	printChunk(doubleEncoded);
+	printf("\n");
+
+	representation = minimumRepresentationSizeInBits(doubleEncoded);
+	printf("The double encoded data can be represented using %d bits.\n\n", representation);
+
+	printf("Decoding the samples...\n");
+
+	decodedStream = computeSum(doubleEncoded);
+
+	printf("1-fold decoded data:\n");
+	printChunk(decodedStream);
+
+	doubleDecoded = computeSum(encodedStream);
+
+	printf("2-fold decoded data:\n");
+	printChunk(doubleDecoded);
+
+	destroyChunk(&stream);
+	destroyChunk(&encodedStream);
+	destroyChunk(&doubleEncoded);
+	destroyChunk(&decodedStream);
+	destroyChunk(&doubleDecoded);
+}
+
+int main(int argc, char* argv[])
+{
+	testC();
+
 	return 0;
 }
