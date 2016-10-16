@@ -35,6 +35,8 @@ Sample* newSample(int bitsPerSample);
 
 void killSample(Sample* sample);
 
+void destroySampleArray(Sample* samples, int n);
+
 /********************* MANIPULAÇÃO DE BLOCOS DE AMOSTRAS *********************/
 
 void initializeChunk(Chunk* chunk, int capacity);
@@ -49,11 +51,21 @@ Chunk* newChunk(int capacity);
 
 void killChunk(Chunk* chunk);
 
+void destroyChannels(Chunk* chunks, int channels);
+
+/**************************** MANIPULAÇÃO DE CANAIS ****************************/
+
+Chunk* isolateChannels(Sample* samples, int numberOfSamples, int channels);
+
+Sample* combineChannels(Chunk* channelChunks, int n);
+
 /********************** MISCELÂNEA **********************/
 
 void assign(Sample* destination, Sample* source);
 
 char* copyBits(char* bits, int n);
+
+void putBits(char* destination, char* source, int n);
 
 /********************** CONVERSÕES E IMPRESSÃO COM BITS **********************/
 
@@ -67,7 +79,11 @@ Sample bitsToSample(char* bits, int bitsPerSample);
 
 Chunk bitsToChunk(char* bits, int bitsPerSample, int n);
 
+Sample* bitsToSampleArray(char* stream, int n, int bitsPerSample);
+
 char* sampleToBits(Sample sample);
+
+char* sampleArrayToBits(Sample* samples, int n);
 
 char* chunkToBits(Chunk chunk);
 
@@ -104,6 +120,10 @@ Chunk computeDifference(Chunk chunk);
 
 Chunk computeSum(Chunk chunk);
 
+Chunk* computeDifferenceWithChannels(Chunk* channelChunks, int channels);
+
+Chunk* computeSumWithChannels(Chunk *channelChunks, int channels);
+
 /************************** UTILITÁRIAS **************************/
 
 int minimumSizeInBits(char* number, int n);
@@ -111,27 +131,5 @@ int minimumSizeInBits(char* number, int n);
 int minimumSampleSizeInBits(Sample sample);
 
 int minimumRepresentationSizeInBits(Chunk chunk);
-
-/* COISAS NOVAS */
-
-Chunk* isolateChannels(Sample* samples, int numberOfSamples, int channels);
-
-Sample* combineChannels(Chunk* channelChunks, int n);
-
-Sample* bitsToSampleArray(char* stream, int n, int bitsPerSample);
-
-void putBits(char* destination, char* source, int n);
-
-char* sampleArrayToBits(Sample* samples, int n);
-
-Chunk* computeDifferenceWithChannels(Chunk* channelChunks, int channels);
-
-Chunk* computeSumWithChannels(Chunk *channelChunks, int channels);
-
-char* differentialEncodingWithChannels(char* stream, int n, int channels, int bitsPerSample);
-
-char* differentialDecodingWithChannels(char* stream, int n, int channels, int bitsPerSample);
-
-void destroyChannels(Chunk* chunks, int channels);
 
 #endif
