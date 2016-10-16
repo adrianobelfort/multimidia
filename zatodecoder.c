@@ -271,8 +271,10 @@ int main (int argc, char* argv[])
 		if (verbose) printf("Running run-length decoding...\n");
 
         dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
+		printf("ORIGINAL DATA BITS SIZE: %llu\n", dataBitsSize);
         char *runlengthDecoded = runlength(dataBits, dataBitsSize, encode_header->runlengthNumBits, &runlengthBitsSize);
         free(dataBits);
+		printf("AFTER RUN LENGTH: %llu\n", runlengthBitsSize);
         dataBits = runlengthDecoded;
         dataBitsSize = runlengthBitsSize;
     }
@@ -280,7 +282,11 @@ int main (int argc, char* argv[])
 	if (encode_header->encodeType & DIFFERENCE_MASK)
 	{
 		if (verbose) printf("Running differential decoding...\n");
-		
+
+		printf("Data bits size: %llu, samples %llu, %llu per channel\n", dataBitsSize,
+			dataBitsSize / (unsigned long long int) encode_header->bitsPerSample,
+			(dataBitsSize / (unsigned long long int) encode_header->bitsPerSample) / (unsigned long long int) encode_header->channels);
+
 		char *differenceDecoded = differentialDecodingWithChannels(dataBits, dataBitsSize,
 			encode_header->channels, encode_header->bitsPerSample);
 

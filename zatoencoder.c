@@ -315,11 +315,16 @@ int main (int argc, char* argv[])
     if(arguments.runlength)
 	{
 		if (verbose) printf("Running run-length encoding...\n");
-		
+
+		printf("ORIGINAL DATA BITS SIZE: %llu\n", dataBitsSize);
+
         char *runlengthBits = runlength(dataBits, dataBitsSize, &runlengthSize, &runlengthNumBits);
         if(!runlengthBits)
             return EXIT_FAILURE;
         free(dataBits);
+
+		printf("AFTER RUN LENGTH: %llu\n", runlengthSize);
+
         dataBits = runlengthBits;
         dataBitsSize = runlengthSize;
     }

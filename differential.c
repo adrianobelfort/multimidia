@@ -609,6 +609,8 @@ Chunk* isolateChannels(Sample* samples, int numberOfSamples, int channels)
 
 	for (i = 0; i < numberOfSamples; i++)
 	{
+		/*printf("Channel: %d, sample (in chunk): %d, stream sample: %d, max: %d\n",
+			i%channels, i/channels, i, numberOfSamples);*/
 		copySample(&chunks[i % channels].samples[i / channels], &samples[i]);
 	}
 
@@ -729,6 +731,7 @@ char* differentialEncodingWithChannels(char* stream, int n, int channels, int bi
 	int numberOfSamples;
 
 	numberOfSamples = n / bitsPerSample;
+	printf("Overall number of samples: %d\n", numberOfSamples);
 
 	samples = bitsToSampleArray(stream, n, bitsPerSample);
 	channelChunks = isolateChannels(samples, numberOfSamples, channels);
@@ -769,6 +772,7 @@ char* differentialDecodingWithChannels(char* stream, int n, int channels, int bi
 	int numberOfSamples;
 
 	numberOfSamples = n / bitsPerSample;
+	printf("Overall number of samples: %d (%d / %d)\n", numberOfSamples, n, bitsPerSample);
 
 	samples = bitsToSampleArray(stream, n, bitsPerSample);
 	channelChunks = isolateChannels(samples, numberOfSamples, channels);
