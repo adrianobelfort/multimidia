@@ -44,6 +44,7 @@ enc_hdr *readEncodeHeader(FILE *input) {
     printf("Encode Mode: %d\n", header->encodeType);
     printf("RunlengthNumBits: %u\n", header->runlengthNumBits);
     printf("TotalLength: %llu\n", header->totalLength);
+	printf("Difference length: %d\n", header->differenceLength);
 
     return header;
 }
@@ -266,11 +267,13 @@ int main (int argc, char* argv[])
     // DADOS DO ARQUIVO DE ENTRADA. DEPOIS, APOS A PRIMEIRA
     // CODIFICACAO, ESSES DADOS SAO ATUALIZADOS.
 
+	//dataBitsSize = encode_header->differenceLength * BITS_PER_CHAR; // inicializacao
+
     if(encode_header->encodeType & RUNLENGTH_MASK)
 	{
 		if (verbose) printf("Running run-length decoding...\n");
 
-        dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
+		dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
 		printf("ORIGINAL DATA BITS SIZE: %llu\n", dataBitsSize);
         char *runlengthDecoded = runlength(dataBits, dataBitsSize, encode_header->runlengthNumBits, &runlengthBitsSize);
         free(dataBits);
@@ -292,6 +295,7 @@ int main (int argc, char* argv[])
 
 		free(dataBits);
 		dataBits = differenceDecoded;
+		//dataBitsSize =
 		/* dataBitsSize não muda */
 	}
 

@@ -29,6 +29,7 @@ typedef struct encodeHeader
 
 	unsigned short channels;
 	unsigned short bitsPerSample; /* In bits */
+	int differenceLength;
 } enc_hdr;
 
 #endif

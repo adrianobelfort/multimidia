@@ -117,6 +117,7 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
 		encodeHeader.encodeType |= 0x4;
 		encodeHeader.channels = header->NumOfChan;
 		encodeHeader.bitsPerSample = header->bitsPerSample;
+		encodeHeader.differenceLength = size / BITS_PER_CHAR;
 	}
 
     if(applyRunlength) {
