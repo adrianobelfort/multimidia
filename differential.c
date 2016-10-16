@@ -1,23 +1,14 @@
+/*
+ *
+ * Compile com: gcc differential-base.h differential.h differential.c -c
+ *
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
-/********************** ORGANIZAÇÃO ESTRUTURAL DOS DADOS **********************/
-
-typedef struct
-{
-	int size;
-	char* data;
-} Sample;
-
-typedef struct
-{
-	int size;
-	Sample* samples;
-} Chunk;
-
-#define POSITIVE 0
-#define NEGATIVE 1
-#define BITS_PER_BYTE 8
+#include "differential-base.h"
+#include "differential.h"
 
 /********************** MANIPULAÇÃO DE AMOSTRAS **********************/
 
@@ -189,7 +180,7 @@ void printBits(char* stream, int n, int bitsPerSample)
 	}
 }
 
-Sample bitsToSample(int bitsPerSample, char* bits)
+Sample bitsToSample(char* bits, int bitsPerSample)
 {
 	Sample sample;
 
@@ -199,21 +190,19 @@ Sample bitsToSample(int bitsPerSample, char* bits)
 	return sample;
 }
 
-Chunk bitsToChunk(int bitsPerSample, char* bits, int n)
+Chunk bitsToChunk(char* bits, int bitsPerSample, int n)
 {
 	int i, numberOfSamples;
 	Chunk chunk;
 
 	numberOfSamples = n / bitsPerSample;
 
-	//printf("Samples: %d, bits per sample %d\n", numberOfSamples, bitsPerSample);
-
 	initializeChunk(&chunk, numberOfSamples);
 
 	for (i = 0; i < numberOfSamples; i++)
 	{
-		// Endereçamento a amostras
-		chunk.samples[i] = bitsToSample(bitsPerSample, bits + i*bitsPerSample);
+		/* Endereçamento a amostras */
+		chunk.samples[i] = bitsToSample(bits + i*bitsPerSample, bitsPerSample);
 	}
 
 	return chunk;
@@ -237,7 +226,7 @@ char* chunkToBits(Chunk chunk)
 {
 	long int slots = 0;
 	int i, j, k = 0;
-	char *stream, *sampleStream;
+	char *stream;
 
 	for (i = 0; i < chunk.size; i++)
 	{
@@ -295,18 +284,13 @@ char* numberToBits(int32_t number, int bits)
 
 	numberBits = (char*) calloc(bits, sizeof(char));
 
-	//printf("[Number to bits]\n");
-	//printf("Number in hex: %x\n", number);
-
 	for (i = 0; i < bits && i < maxOffset; i++)
 	{
-		//if (limit-i == 0) printf("MSB: %d\n", (number >> i) & 0x1);
 		numberBits[limit-i] = (char)((number >> i) & 0x1);
 	}
 
 	while (i < bits)
 	{
-		//printf("I'm stuck here :(\n");
 		numberBits[limit-i] = numberBits[bits - maxOffset];
 		i++;
 	}
@@ -317,8 +301,8 @@ char* numberToBits(int32_t number, int bits)
 Sample numberToSample(int32_t number, int bitsPerSample)
 {
 	Sample sample;
-	initializeSample(&sample, bitsPerSample);
 
+	sample.size = bitsPerSample;
 	sample.data = numberToBits(number, bitsPerSample);
 
 	return sample;
@@ -331,21 +315,16 @@ int sumBits(char* a, char* b, char* result, int n)
 	int i;
 	char carry = 0, and, xor;
 
-	//printf("\nA is %d, B is %d\n", niceNumber(a,n), niceNumber(b,n));
-
 	for (i = n-1; i >= 0; i--)
 	{
-		//printf("For i = %d: a[i] is %d and b[i] is %d\n", i, a[i], b[i]);
 		xor = a[i] ^ b[i];
 		and = a[i] & b[i];
-		//printf("xor yielded %d and and yielded %d - carry is %d\n", xor, and, carry);
 
 		result[i] = xor ^ carry;
-		//printf("Carry is %d\n", carry);
 		carry = (carry & xor) | and;
 	}
 
-	return carry; // indica overflow
+	return carry; /* Indica overflow */
 }
 
 char* negate(char* number, int n)
@@ -380,7 +359,7 @@ int sumOne(char* number, int n)
 		one = 0;
 	}
 
-	return carry; // indica overflow
+	return carry; /* Indica overflow */
 }
 
 Sample convertSampleToSigned(Sample sample)
@@ -421,7 +400,7 @@ Sample signedDifference(Sample a, Sample b)
 	Sample differenceSample;
 
 	negatedB = negate(b.data, b.size);
-	result = negatedB; // sim, reusamos o vetor B invertido
+	result = negatedB; /* Sim, reusamos o vetor B invertido */
 	sumOne(negatedB, size);
 
 	sumBits(a.data, negatedB, result, size);
@@ -443,7 +422,7 @@ Sample unsignedDifference(Sample a, Sample b)
 	return signedDifference(signedA, signedB);
 }
 
-// O mesmo que a operação a - b
+/* O mesmo que a operação a - b */
 Sample difference(Sample a, Sample b)
 {
 	int size;
@@ -575,7 +554,7 @@ char* differentialEncoding(char* stream, int n, int bitsPerSample)
 	Chunk streamChunk, differenceChunk;
 	char* encodedStream;
 
-	streamChunk = bitsToChunk(bitsPerSample, stream, n);
+	streamChunk = bitsToChunk(stream, bitsPerSample, n);
 
 	printf("Before encoding\n");
 	printChunk(streamChunk);
@@ -600,7 +579,7 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 	Chunk streamChunk, sumChunk;
 	char* decodedStream;
 
-	streamChunk = bitsToChunk(bitsPerSample, stream, n);
+	streamChunk = bitsToChunk(stream, bitsPerSample, n);
 
 	printf("Before decoding\n");
 	printChunk(streamChunk);
@@ -617,156 +596,192 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 	return decodedStream;
 }
 
-/********************** PROGRAMA PRINCIPAL **********************/
-
-void testA()
+Chunk* isolateChannels(Sample* samples, int numberOfSamples, int channels)
 {
-	char sample[] = {0,1,0,1, 0,0,1,1, 0,1,0,0, 0,1,0,1, 0,1,1,1};  //5,3,4,5,7
-	char *differentialSamples, *rebuiltSamples;
+	Chunk* chunks;
+	int i;
 
-	printf("Original bits: ");
-	printBits(sample, 5*4, 4);
-	printf("\n\n");
+	chunks = (Chunk*) malloc(channels * sizeof(Chunk));
+	for (i = 0; i < channels; i++)
+	{
+		initializeChunk(&chunks[i], numberOfSamples / channels);
+	}
 
-	differentialSamples = differentialEncoding(sample, 5*4, 4);
+	for (i = 0; i < numberOfSamples; i++)
+	{
+		copySample(&chunks[i % channels].samples[i / channels], &samples[i]);
+	}
 
-	printf("\nEncoded bits: ");
-	printBits(differentialSamples, 5*4, 4);
-	printf("\n\n");
-
-	rebuiltSamples = differentialDecoding(differentialSamples, 5*4, 4);
-
-	printf("\nRebuilt bits: ");
-	printBits(rebuiltSamples, 5*4, 4);
-	printf("\n\n");
-
-	free(differentialSamples);
-	free(rebuiltSamples);
+	return chunks;
 }
 
-void testB()
+Sample* combineChannels(Chunk* channelChunks, int channels)
 {
-	char* differentialSamples, *rebuiltSamples;
-	int n, bits, i, sample, representation;
-	Chunk stream, encodedStream, decodedStream;
-	Sample streamSample;
+	Sample* samples;
+	int i, numberOfSamples = 0;
 
-	printf("Enter the number of samples you want to use: ");
-	scanf("%d", &n);
-	printf("Enter the maximum number of bits to represent each (unsigned) value: ");
-	scanf("%d", &bits);
-	printf("\n");
+	for (i = 0; i < channels; i++)
+	{
+		numberOfSamples += channelChunks[i].size;
+	}
 
-	initializeChunk(&stream, n);
+	samples = (Sample*) malloc(numberOfSamples * sizeof(Sample));
+
+	for (i = 0; i < numberOfSamples; i++)
+	{
+		copySample(&samples[i], &channelChunks[i % channels].samples[i / channels]);
+	}
+
+	return samples;
+}
+
+Sample* bitsToSampleArray(char* stream, int n, int bitsPerSample)
+{
+	int i, numberOfSamples;
+	Sample* samples;
+
+	numberOfSamples = n / bitsPerSample;
+
+	samples = (Sample*) malloc(numberOfSamples * sizeof(Sample));
+
+	for (i = 0; i < numberOfSamples; i++)
+	{
+		samples[i] = bitsToSample(stream + i*bitsPerSample, bitsPerSample);
+	}
+
+	return samples;
+}
+
+void putBits(char* destination, char* source, int n)
+{
+	int i;
 
 	for (i = 0; i < n; i++)
 	{
-		printf("Sample %d: ", i);
-		scanf("%d", &sample);
-
-		streamSample = numberToSample(sample, bits+1);
-		stream.samples[i] = streamSample;
+		destination[i] = source[i];
 	}
-	printf("\n");
-
-	printf("Original data:\n");
-	printChunk(stream);
-	printf("\n");
-
-	printf("Encoding the samples...\n");
-
-	encodedStream = computeDifference(stream);
-
-	printf("Encoded data:\n");
-	printChunk(encodedStream);
-	printf("\n");
-
-	representation = minimumRepresentationSizeInBits(encodedStream);
-	printf("The encoded data can be represented using %d bits.\n\n", representation);
-
-	printf("Decoding the samples...\n");
-
-	decodedStream = computeSum(encodedStream);
-
-	printf("Decoded data:\n");
-	printChunk(decodedStream);
-
-	destroyChunk(&stream);
-	destroyChunk(&encodedStream);
-	destroyChunk(&decodedStream);
 }
 
-void testC()
+char* sampleArrayToBits(Sample* samples, int n)
 {
-	char* differentialSamples, *rebuiltSamples;
-	int n, bits, i, sample, representation;
-	Chunk stream, encodedStream, decodedStream, doubleEncoded, doubleDecoded;
-	Sample streamSample;
-
-	printf("Enter the number of samples you want to use: ");
-	scanf("%d", &n);
-	printf("Enter the maximum number of bits to represent each (unsigned) value: ");
-	scanf("%d", &bits);
-	printf("\n");
-
-	initializeChunk(&stream, n);
+	char *bits;
+	int i, size = 0;
 
 	for (i = 0; i < n; i++)
 	{
-		printf("Sample %d: ", i);
-		scanf("%d", &sample);
-
-		streamSample = numberToSample(sample, bits+1);
-		stream.samples[i] = streamSample;
+		size += samples[i].size;
 	}
-	printf("\n");
 
-	printf("Original data:\n");
-	printChunk(stream);
-	printf("\n");
+	bits = (char*) malloc(size * sizeof(char));
 
-	printf("Encoding the samples...\n");
+	for (i = 0; i < n; i++)
+	{
+		putBits(bits + i*samples[i].size, samples[i].data, samples[i].size);
+	}
 
-	encodedStream = computeDifference(stream);
-
-	printf("Encoded data:\n");
-	printChunk(encodedStream);
-	printf("\n");
-
-	representation = minimumRepresentationSizeInBits(encodedStream);
-	printf("The encoded data can be represented using %d bits.\n\n", representation);
-
-	doubleEncoded = computeDifference(encodedStream);
-
-	printf("Double encoded data:\n");
-	printChunk(doubleEncoded);
-	printf("\n");
-
-	representation = minimumRepresentationSizeInBits(doubleEncoded);
-	printf("The double encoded data can be represented using %d bits.\n\n", representation);
-
-	printf("Decoding the samples...\n");
-
-	decodedStream = computeSum(doubleEncoded);
-
-	printf("1-fold decoded data:\n");
-	printChunk(decodedStream);
-
-	doubleDecoded = computeSum(encodedStream);
-
-	printf("2-fold decoded data:\n");
-	printChunk(doubleDecoded);
-
-	destroyChunk(&stream);
-	destroyChunk(&encodedStream);
-	destroyChunk(&doubleEncoded);
-	destroyChunk(&decodedStream);
-	destroyChunk(&doubleDecoded);
+	return bits;
 }
 
-int main(int argc, char* argv[])
+Chunk* computeDifferenceWithChannels(Chunk* channelChunks, int channels)
 {
-	testC();
+	Chunk *differenceChunks;
+	int i;
 
-	return 0;
+	differenceChunks = (Chunk*) malloc(channels * sizeof(Chunk));
+
+	for (i = 0; i < channels; i++)
+	{
+		differenceChunks[i] = computeDifference(channelChunks[i]);
+	}
+
+	return differenceChunks;
+}
+
+void destroySampleArray(Sample* samples, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+	{
+		destroySample(&samples[i]);
+	}
+
+	free(samples);
+}
+
+void destroyChannels(Chunk* chunks, int channels)
+{
+	int i;
+
+	for (i = 0; i < channels; i++)
+	{
+		destroyChunk(&chunks[i]);
+	}
+
+	free(chunks);
+}
+
+char* differentialEncodingWithChannels(char* stream, int n, int channels, int bitsPerSample)
+{
+	Chunk *channelChunks, *encodedChannelChunks;
+	Sample *samples, *encodedSamples;
+	char* encodedStream;
+	int numberOfSamples;
+
+	numberOfSamples = n / bitsPerSample;
+
+	samples = bitsToSampleArray(stream, n, bitsPerSample);
+	channelChunks = isolateChannels(samples, numberOfSamples, channels);
+
+	encodedChannelChunks = computeDifferenceWithChannels(channelChunks, channels);
+
+	encodedSamples = combineChannels(encodedChannelChunks, channels);
+	encodedStream = sampleArrayToBits(encodedSamples, numberOfSamples);
+
+	destroyChannels(channelChunks, channels);
+	destroyChannels(encodedChannelChunks, channels);
+	destroySampleArray(encodedSamples, numberOfSamples);
+	destroySampleArray(samples, numberOfSamples);
+
+	return encodedStream;
+}
+
+Chunk* computeSumWithChannels(Chunk *channelChunks, int channels)
+{
+	Chunk *sumChunks;
+	int i;
+
+	sumChunks = (Chunk*) malloc(channels * sizeof(Chunk));
+
+	for (i = 0; i < channels; i++)
+	{
+		sumChunks[i] = computeSum(channelChunks[i]);
+	}
+
+	return sumChunks;
+}
+
+char* differentialDecodingWithChannels(char* stream, int n, int channels, int bitsPerSample)
+{
+	Chunk *channelChunks, *decodedChannelChunks;
+	Sample *samples, *decodedSamples;
+	char* decodedStream;
+	int numberOfSamples;
+
+	numberOfSamples = n / bitsPerSample;
+
+	samples = bitsToSampleArray(stream, n, bitsPerSample);
+	channelChunks = isolateChannels(samples, numberOfSamples, channels);
+
+	decodedChannelChunks = computeSumWithChannels(channelChunks, channels);
+
+	decodedSamples = combineChannels(decodedChannelChunks, channels);
+	decodedStream = sampleArrayToBits(decodedSamples, numberOfSamples);
+
+	destroyChannels(channelChunks, channels);
+	destroyChannels(decodedChannelChunks, channels);
+	destroySampleArray(decodedSamples, numberOfSamples);
+	destroySampleArray(samples, numberOfSamples);
+
+	return decodedStream;
 }
