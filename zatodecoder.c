@@ -152,15 +152,20 @@ char *convertRunLengthToBits(unsigned long long int totalBitsLength, unsigned lo
 char *runlength(char *data, unsigned long long int size, unsigned int numBits, unsigned long long int *totalBitsLength) {
 
     unsigned long long int i;
+	size = size - (size % numBits);
     unsigned long long int numberSamples = size/numBits;
     printf("\n\n\nnumSamples - %llu\nSize - %llu\nnumbits - %u\n\n\n", numberSamples, size, numBits);
-    unsigned int currBit = 0, j = 0, shift;
-    unsigned long long int currValue = 0;
+    unsigned int currBit = 0, shift;
+    unsigned long long int currValue = 0, j = 0;
     *totalBitsLength = 0;
 
     //printf("\n\n\nsize: %llu\n\n\nnumbits: %u\n\n\n", size, numBits);
 
     unsigned long long int *runlengthSamples = (unsigned long long int *) malloc(numberSamples*sizeof(unsigned long long int));
+
+    for(i = 0; i < numberSamples; i++) {
+    	runlengthSamples[i] = 0;
+    }
 
     //printf("\n\ncurrValue: %llu\n\n", currValue);
     for(i = 0; i < size; i++) {
@@ -178,10 +183,10 @@ char *runlength(char *data, unsigned long long int size, unsigned int numBits, u
         currValue |= data[i] << shift;
     }
 
-    if(currValue != 0) {
+    /*if(currValue != 0) {
         runlengthSamples[j++] = currValue;
         *totalBitsLength += currValue;
-    }
+    }*/
 
     //printf("\n\n\n%llu\n\n\n", *totalBitsLength * sizeof(char));
     char *dataBits = convertRunLengthToBits(*totalBitsLength * sizeof(char), runlengthSamples, numberSamples);
@@ -216,8 +221,8 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
         currByte |= data[i] << shift;
     }
 
-    if(currByte != 0)
-        byteData[j++] = currByte;
+    /*if(currByte != 0)
+        byteData[j++] = currByte;*/
 
     if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
         return EXIT_FAILURE;

@@ -136,11 +136,16 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
         return EXIT_FAILURE;
     }
 
-    char *byteData = (char *) malloc(size/BITS_PER_CHAR);
+    char *byteData = (char *) malloc(size/BITS_PER_CHAR*sizeof(char));
     unsigned long long int i, j = 0;
     char currByte = 0;
     int currBit = 0;
     int shift;
+
+    for(i = 0; i < size/BITS_PER_CHAR; i++) {
+	byteData[i] = 0;
+    }
+
     for(i = 0; i < size; i++) {
         if(currBit == BITS_PER_CHAR) {
             currBit = 0;
@@ -153,8 +158,8 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
         currByte |= data[i] << shift;
     }
 
-    if(currByte != 0)
-        byteData[j++] = currByte;
+    /*if(currByte != 0)
+        byteData[j++] = currByte;*/
 
     if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
         return EXIT_FAILURE;
@@ -328,6 +333,8 @@ int main (int argc, char* argv[])
 
         dataBits = runlengthBits;
         dataBitsSize = runlengthSize;
+		dataBitsSize = dataBitsSize - (dataBitsSize % BITS_PER_CHAR);
+		printf("DBSIZE %llu\n", dataBitsSize);
     }
 
 
