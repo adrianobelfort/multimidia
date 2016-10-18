@@ -104,12 +104,11 @@ void printEncodeHeader(enc_hdr header)
 
 char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize)
 {
-	huge_t i, limit;
+	huge_t i;
 	int shift;
 	char *charStream;
 
 	*charStreamSize = size / BITS_PER_BYTE;
-	limit = size - 1;
 
 	charStream = (char*) calloc(*charStreamSize, sizeof(char));
 
@@ -143,12 +142,11 @@ char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize
 
 char* charStreamToBitStream(char* charStream, huge_t size, huge_t *bitStreamSize)
 {
-	huge_t i, limit;
+	huge_t i;
 	int shift;
 	char* bitStream;
 
 	*bitStreamSize = size * BITS_PER_BYTE;
-	limit = *bitStreamSize - 1;
 
 	bitStream = (char*) malloc(*bitStreamSize * sizeof(char));
 
@@ -240,4 +238,6 @@ size_t writeFile(char* data, huge_t size, wav_hdr header, FILE* filePointer)
 
 	bytesWritten += writeHeader(header, filePointer);
 	bytesWritten += writeData(data, size, filePointer);
+
+	return bytesWritten;
 }

@@ -335,8 +335,8 @@ void testG() /* Encoding com o arquivo */
 	encodeHeader.channels = header.NumOfChan;
 	encodeHeader.differenceLength = (huge_t) header.Subchunk2Size * BITS_PER_BYTE;
 
-	encodedBits = differentialEncoding(originalDataBits, originalDataBitsSize, header.bitsPerSample);
-	//encodedBits = differentialEncodingWithChannels(originalDataBits, originalDataBitsSize, header.NumOfChan, header.bitsPerSample);
+	//encodedBits = differentialEncoding(originalDataBits, originalDataBitsSize, header.bitsPerSample);
+	encodedBits = differentialEncodingWithChannels(originalDataBits, originalDataBitsSize, header.NumOfChan, header.bitsPerSample);
 	encodedBytes = bitStreamToCharStream(encodedBits, originalDataBitsSize, &encodedBytesSize);
 
 	//writeData(encodedBytes, encodedBytesSize, encodedWavFile);
@@ -365,10 +365,10 @@ void testH() /* Decoding com o arquivo */
 	printf("Enter the name of the output file: ");
 	scanf("%s", outputFilename);
 
-	encodedFile = openFile(inputFilename, "rb");
+	encodedFile = openFile(inputFilename, "r");
 	if (encodedFile == NULL) return;
 
-	decodedWavFile = openFile(outputFilename, "wb");
+	decodedWavFile = openFile(outputFilename, "w");
 	if (decodedWavFile == NULL)
 	{
 		closeFile(decodedWavFile);
@@ -381,8 +381,8 @@ void testH() /* Decoding com o arquivo */
 	printf("Channels: %d\n", encodeHeader.channels);
 	printf("Difference length: %llu\n", encodeHeader.differenceLength);
 
-	decodedBits = differentialDecoding(originalDataBits, originalDataBitsSize, header.bitsPerSample);
-	//decodedBits = differentialDecodingWithChannels(originalDataBits, originalDataBitsSize, header.NumOfChan, header.bitsPerSample);
+	//decodedBits = differentialDecoding(originalDataBits, originalDataBitsSize, header.bitsPerSample);
+	decodedBits = differentialDecodingWithChannels(originalDataBits, originalDataBitsSize, header.NumOfChan, header.bitsPerSample);
 	decodedBytes = bitStreamToCharStream(decodedBits, originalDataBitsSize, &decodedBytesSize);
 
 	writeFile(decodedBytes, decodedBytesSize, header, decodedWavFile);
@@ -397,11 +397,11 @@ void testH() /* Decoding com o arquivo */
 void testI()
 {
 	char inputFilename[50], outputFilename[50], rebuiltFilename[50];
-	char *originalDataBits, *encodedBits, *encodedBytes;
+	char *originalDataBits, *encodedBytes;
 	wav_hdr header;
 	enc_hdr encodeHeader;
 	FILE *wavFile, *encodedWavFile;
-	huge_t originalDataBitsSize, encodedBytesSize, i;
+	huge_t originalDataBitsSize, encodedBytesSize;
 
 	printf("Encoding\n");
 
@@ -537,7 +537,7 @@ void testK()
 
 int main(int argc, char* argv[])
 {
-	testI();
+	testH();
 
 	return 0;
 }

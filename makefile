@@ -3,7 +3,7 @@ CFLAGS=-Wall -g
 DEPS = parser.h
 OBJ = parser-encoder.o parser-decoder.o
 
-all: $(OBJ) encode decode
+all: $(OBJ) encode decode test
 
 encode: parser-encoder.o zatoencoder.c differential.o List.o utils.h
 	$(CC) zatoencoder.c parser-encoder.o differential.o List.o -o encode $(CFLAGS)
@@ -19,6 +19,12 @@ differential: differential.c differential-base.h differential.h
 
 runlength: List.c List.h
 	$(CC) List.c -c $(CFLAGS)
+
+test: dtest.c differential.o reader.o
+	$(CC) dtest.c reader.o differential.o -o test $(CFLAGS)
+
+reader: reader.c reader.h
+	$(CC) reader.c -c $(CFLAGS)
 
 clean:
 	rm *.o encode decode
