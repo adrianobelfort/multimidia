@@ -44,7 +44,7 @@ enc_hdr *readEncodeHeader(FILE *input) {
     printf("Encode Mode: %d\n", header->encodeType);
     printf("RunlengthNumBits: %u\n", header->runlengthNumBits);
     printf("TotalLength: %llu\n", header->totalLength);
-	printf("Difference length: %d\n", header->differenceLength);
+	printf("Difference length: %llu\n", header->differenceLength);
 
     return header;
 }
@@ -127,10 +127,6 @@ char *convertRunLengthToBits(unsigned long long int totalBitsLength, unsigned lo
     unsigned long long int j, offset = 0;
     unsigned int current = 0;
 
-//    for(i = 0; i < numberSamples; i++) {
-//        printf("\nSample %lu - %llu\n", i, samples[i]);
-//    }
-
     for(i = 0; i < numberSamples; i++) {
         for(j = 0; j < samples[i]; j++) {
             runLengthBits[offset + j] = current;
@@ -158,8 +154,6 @@ char *runlength(char *data, unsigned long long int size, unsigned int numBits, u
     unsigned int currBit = 0, shift;
     unsigned long long int currValue = 0, j = 0;
     *totalBitsLength = 0;
-
-    //printf("\n\n\nsize: %llu\n\n\nnumbits: %u\n\n\n", size, numBits);
 
     unsigned long long int *runlengthSamples = (unsigned long long int *) malloc(numberSamples*sizeof(unsigned long long int));
 

@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "differential-base.h"
 #include "differential.h"
+#include "reader.h"
+#include <string.h>
 
 /********************** PROGRAMA PRINCIPAL **********************/
 
@@ -272,9 +274,270 @@ void testE()
 	free(rebuiltStream);
 }
 
+void testF()
+{
+	char sample[] = {0,1,0,1,1,1,0,1,0,0,0,1,0,1,0,1}; //01011101 00010101
+	char *result, *rebuiltSample;
+	huge_t originalSize, convertedSize, rebuiltSize, i;
+
+	originalSize = 16;
+
+	result = bitStreamToCharStream(sample, originalSize, &convertedSize);
+
+	for (i = 0; i < convertedSize; i++)
+	{
+		printf("Byte %llu: %d\n", i, result[i]);
+	}
+
+	rebuiltSample = charStreamToBitStream(result, convertedSize, &rebuiltSize);
+
+	for (i = 0; i < rebuiltSize; i++)
+	{
+		if (i % BITS_PER_BYTE == 0) printf(" ");
+		printf("%d", rebuiltSample[i]);
+	}
+	printf("\n");
+
+	free(result);
+	free(rebuiltSample);
+}
+
+void testG() /* Encoding com o arquivo */
+{
+	char inputFilename[50], outputFilename[50];
+	char *originalDataBits, *encodedBits, *encodedBytes;
+	wav_hdr header;
+	enc_hdr encodeHeader;
+	FILE *wavFile, *encodedWavFile;
+	huge_t originalDataBitsSize, encodedBytesSize;
+
+	printf("Encoding\n");
+
+	printf("Enter the name of the input file: ");
+	scanf("%s", inputFilename);
+	printf("Enter the name of the output file: ");
+	scanf("%s", outputFilename);
+
+	wavFile = openFile(inputFilename, "rb");
+	if (wavFile == NULL) return;
+
+	encodedWavFile = openFile(outputFilename, "wb");
+	if (encodedWavFile == NULL)
+	{
+		closeFile(wavFile);
+		return;
+	}
+
+	originalDataBits = extractFile(wavFile, &header, &originalDataBitsSize);
+
+	/* Codificação - pode encapsular isso */
+	encodeHeader.encodeType = 0x4;
+	encodeHeader.channels = header.NumOfChan;
+	encodeHeader.differenceLength = (huge_t) header.Subchunk2Size * BITS_PER_BYTE;
+
+	encodedBits = differentialEncoding(originalDataBits, originalDataBitsSize, header.bitsPerSample);
+	//encodedBits = differentialEncodingWithChannels(originalDataBits, originalDataBitsSize, header.NumOfChan, header.bitsPerSample);
+	encodedBytes = bitStreamToCharStream(encodedBits, originalDataBitsSize, &encodedBytesSize);
+
+	//writeData(encodedBytes, encodedBytesSize, encodedWavFile);
+	writeEncodedFile(encodedBytes, encodedBytesSize, header, encodeHeader, encodedWavFile);
+
+	closeFile(wavFile);
+	closeFile(encodedWavFile);
+	free(originalDataBits);
+	free(encodedBits);
+	free(encodedBytes);
+}
+
+void testH() /* Decoding com o arquivo */
+{
+	char inputFilename[50], outputFilename[50];
+	char *originalDataBits, *decodedBits, *decodedBytes;
+	wav_hdr header;
+	enc_hdr encodeHeader;
+	FILE *encodedFile, *decodedWavFile;
+	huge_t originalDataBitsSize, decodedBytesSize;
+
+	printf("Decoding\n");
+
+	printf("Enter the name of the input file: ");
+	scanf("%s", inputFilename);
+	printf("Enter the name of the output file: ");
+	scanf("%s", outputFilename);
+
+	encodedFile = openFile(inputFilename, "rb");
+	if (encodedFile == NULL) return;
+
+	decodedWavFile = openFile(outputFilename, "wb");
+	if (decodedWavFile == NULL)
+	{
+		closeFile(decodedWavFile);
+		return;
+	}
+
+	originalDataBits = extractEncodedFile(encodedFile, &header, &encodeHeader, &originalDataBitsSize);
+
+	printf("Encode header:\n");
+	printf("Channels: %d\n", encodeHeader.channels);
+	printf("Difference length: %llu\n", encodeHeader.differenceLength);
+
+	decodedBits = differentialDecoding(originalDataBits, originalDataBitsSize, header.bitsPerSample);
+	//decodedBits = differentialDecodingWithChannels(originalDataBits, originalDataBitsSize, header.NumOfChan, header.bitsPerSample);
+	decodedBytes = bitStreamToCharStream(decodedBits, originalDataBitsSize, &decodedBytesSize);
+
+	writeFile(decodedBytes, decodedBytesSize, header, decodedWavFile);
+
+	closeFile(encodedFile);
+	closeFile(decodedWavFile);
+	free(originalDataBits);
+	free(decodedBits);
+	free(decodedBytes);
+}
+
+void testI()
+{
+	char inputFilename[50], outputFilename[50], rebuiltFilename[50];
+	char *originalDataBits, *encodedBits, *encodedBytes;
+	wav_hdr header;
+	enc_hdr encodeHeader;
+	FILE *wavFile, *encodedWavFile;
+	huge_t originalDataBitsSize, encodedBytesSize, i;
+
+	printf("Encoding\n");
+
+	printf("Enter the name of the input file: ");
+	scanf("%s", inputFilename);
+	printf("Enter the name of the output file: ");
+	scanf("%s", outputFilename);
+	printf("Enter the name of the rebuilt file: ");
+	scanf("%s", rebuiltFilename);
+
+	wavFile = openFile(inputFilename, "r");
+	if (wavFile == NULL) return;
+
+	encodedWavFile = openFile(outputFilename, "w");
+	if (encodedWavFile == NULL)
+	{
+		closeFile(wavFile);
+		return;
+	}
+
+	//memset(&header, 0, sizeof(wav_hdr));
+	originalDataBits = extractFile(wavFile, &header, &originalDataBitsSize);
+
+	printHeader(header);
+	printf("File size: %ld\n", fileSize(wavFile));
+
+	/* Codificação - pode encapsular isso */
+	encodeHeader.encodeType = 0x4;
+	encodeHeader.channels = header.NumOfChan;
+	encodeHeader.differenceLength = (huge_t) header.Subchunk2Size * BITS_PER_BYTE;
+
+	encodedBytes = bitStreamToCharStream(originalDataBits, originalDataBitsSize, &encodedBytesSize);
+
+	/*printf("Original: ");
+	for(i = 0; i < 100; i++)
+	{
+		printf("%x", encodedBytes[i]);
+	}
+	printf("\n");*/
+
+	//writeData(encodedBytes, encodedBytesSize, encodedWavFile);
+	writeEncodedFile(encodedBytes, encodedBytesSize, header, encodeHeader, encodedWavFile);
+
+	closeFile(wavFile);
+	closeFile(encodedWavFile);
+	free(originalDataBits);
+	free(encodedBytes);
+
+	encodedWavFile = openFile(outputFilename, "rb");
+	if (wavFile == NULL) return;
+
+	wavFile = openFile(rebuiltFilename, "wb");
+	if (encodedWavFile == NULL)
+	{
+		closeFile(encodedWavFile);
+		return;
+	}
+
+	originalDataBits = extractEncodedFile(encodedWavFile, &header, &encodeHeader, &originalDataBitsSize);
+	encodedBytes = bitStreamToCharStream(originalDataBits, originalDataBitsSize, &encodedBytesSize);
+
+	/*printf("Read: ");
+	for(i = 0; i < 100; i++)
+	{
+		printf("%x", encodedBytes[i]);
+	}
+	printf("\n");*/
+
+	writeFile(encodedBytes, encodedBytesSize, header, wavFile);
+
+	closeFile(wavFile);
+	closeFile(encodedWavFile);
+	free(originalDataBits);
+	free(encodedBytes);
+}
+
+void testJ()
+{
+	char samples[] = {10, 14, 13, 17, 11};
+	char *bits, *rebuilt;
+	huge_t bitsSize, rebuiltSize, i;
+
+	bits = charStreamToBitStream(samples, 5, &bitsSize);
+
+	for (i = 0; i < bitsSize; i++)
+	{
+		if (i%8 == 0) printf(" ");
+		printf("%d", bits[i]);
+	}
+	printf("\n");
+
+	rebuilt = bitStreamToCharStream(bits, bitsSize, &rebuiltSize);
+	for (i = 0; i < rebuiltSize; i++)
+	{
+		if (i%8 == 0) printf(" ");
+		printf("%d ", rebuilt[i]);
+	}
+	printf("\n");
+}
+
+void testK()
+{
+	char sample[] = {1,1,1,1,0,0,1,0,1,1,0,0,1,0,1,0,0,0,1,1,0,0,1,0};
+	int size, i;
+
+	size = 24;
+
+	for (i = 0; i < size; i++)
+	{
+		if (i%8 == 0) printf(" ");
+		printf("%d", sample[i]);
+	}
+	printf("\n");
+
+	invertEndianess(sample, size, 8);
+
+	for (i = 0; i < size; i++)
+	{
+		if (i%8 == 0) printf(" ");
+		printf("%d", sample[i]);
+	}
+	printf("\n");
+
+	invertEndianess(sample, size, 8);
+
+	for (i = 0; i < size; i++)
+	{
+		if (i%8 == 0) printf(" ");
+		printf("%d", sample[i]);
+	}
+	printf("\n");
+}
+
 int main(int argc, char* argv[])
 {
-	testE();
+	testI();
 
 	return 0;
 }

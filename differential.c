@@ -432,14 +432,16 @@ Sample difference(Sample a, Sample b)
 
 	size = a.size;
 
-	if (size == 8)
+	/*if (size == 8)
 	{
 		differenceSample = unsignedDifference(a, b);
 	}
 	else
 	{
 		differenceSample = signedDifference(a, b);
-	}
+	}*/
+
+	differenceSample = signedDifference(a, b);
 
 	return differenceSample;
 }
@@ -556,13 +558,13 @@ char* differentialEncoding(char* stream, int n, int bitsPerSample)
 
 	streamChunk = bitsToChunk(stream, bitsPerSample, n);
 
-	printf("Before encoding\n");
-	printChunk(streamChunk);
+	//printf("Before encoding\n");
+	//printChunk(streamChunk);
 
 	differenceChunk = computeDifference(streamChunk);
 
-	printf("\nAfter encoding\n");
-	printChunk(differenceChunk);
+	//printf("\nAfter encoding\n");
+	//printChunk(differenceChunk);
 
 	encodedStream = chunkToBits(differenceChunk);
 
@@ -581,12 +583,12 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 
 	streamChunk = bitsToChunk(stream, bitsPerSample, n);
 
-	printf("Before decoding\n");
-	printChunk(streamChunk);
+	//printf("Before decoding\n");
+	//printChunk(streamChunk);
 	sumChunk = computeSum(streamChunk);
 
-	printf("\nAfter decoding\n");
-	printChunk(sumChunk);
+	//printf("\nAfter decoding\n");
+	//printChunk(sumChunk);
 
 	decodedStream = chunkToBits(sumChunk);
 
@@ -693,6 +695,7 @@ Chunk* computeDifferenceWithChannels(Chunk* channelChunks, int channels)
 
 	for (i = 0; i < channels; i++)
 	{
+		//printChunk(channelChunks[i]);
 		differenceChunks[i] = computeDifference(channelChunks[i]);
 	}
 
@@ -759,6 +762,7 @@ Chunk* computeSumWithChannels(Chunk *channelChunks, int channels)
 	for (i = 0; i < channels; i++)
 	{
 		sumChunks[i] = computeSum(channelChunks[i]);
+		//printChunk(sumChunks[i]);
 	}
 
 	return sumChunks;
@@ -788,4 +792,22 @@ char* differentialDecodingWithChannels(char* stream, int n, int channels, int bi
 	destroySampleArray(samples, numberOfSamples);
 
 	return decodedStream;
+}
+
+void invertEndianess(char* bitStream, huge_t size, int bitsPerSample)
+{
+	huge_t samples, i, j;
+	char aux;
+
+	samples = size / (huge_t) bitsPerSample;
+
+	for (i = 0; i < samples; i++)
+	{
+		for (j = 0; j < bitsPerSample/2; j++)
+		{
+			aux = bitStream[i*bitsPerSample + j];
+			bitStream[i*bitsPerSample + j] = bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)];
+			bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)] = aux;
+		}
+	}
 }

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define huge_t unsigned long long
+
 /********************** ORGANIZAÇÃO ESTRUTURAL DOS DADOS **********************/
 
 typedef struct
@@ -66,6 +68,8 @@ void assign(Sample* destination, Sample* source);
 char* copyBits(char* bits, int n);
 
 void putBits(char* destination, char* source, int n);
+
+void invertEndianess(char* bitStream, huge_t size, int bitsPerSample);
 
 /********************** CONVERSÕES E IMPRESSÃO COM BITS **********************/
 
