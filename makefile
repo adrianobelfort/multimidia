@@ -27,4 +27,4 @@ reader: reader.c reader.h
 	$(CC) reader.c -c $(CFLAGS)
 
 clean:
-	rm *.o encode decode
+	rm *.o encode decode test

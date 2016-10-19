@@ -81,15 +81,15 @@ void printBits(char* stream, int n, int bitsPerSample);
 
 Sample bitsToSample(char* bits, int bitsPerSample);
 
-Chunk bitsToChunk(char* bits, int bitsPerSample, int n);
+Chunk bitsToChunk(char* bits, int n, int bitsPerSample);
 
 Sample* bitsToSampleArray(char* stream, int n, int bitsPerSample);
 
-char* sampleToBits(Sample sample);
+char* sampleToBits(Sample sample, int *size);
 
 char* sampleArrayToBits(Sample* samples, int n);
 
-char* chunkToBits(Chunk chunk);
+char* chunkToBits(Chunk chunk, huge_t *bitStreamSize);
 
 void printSample(Sample sample);
 
@@ -135,5 +135,15 @@ int minimumSizeInBits(char* number, int n);
 int minimumSampleSizeInBits(Sample sample);
 
 int minimumRepresentationSizeInBits(Chunk chunk);
+
+// NOVAS
+
+int reduceSample(Sample* sample, int bitsPerSample);
+
+void expandSample(Sample* sample, int bitsPerSample);
+
+int reduceChunk(Chunk* chunk);
+
+int expandChunk(Chunk* chunk, int bitsPerSample);
 
 #endif

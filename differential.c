@@ -190,7 +190,7 @@ Sample bitsToSample(char* bits, int bitsPerSample)
 	return sample;
 }
 
-Chunk bitsToChunk(char* bits, int bitsPerSample, int n)
+Chunk bitsToChunk(char* bits, int n, int bitsPerSample)
 {
 	int i, numberOfSamples;
 	Chunk chunk;
@@ -208,11 +208,12 @@ Chunk bitsToChunk(char* bits, int bitsPerSample, int n)
 	return chunk;
 }
 
-char* sampleToBits(Sample sample)
+char* sampleToBits(Sample sample, int *size)
 {
 	char* streamline;
 	int i;
 
+	*size = sample.size;
 	streamline = (char*) malloc(sample.size * sizeof(char));
 	for (i = 0; i < sample.size; i++)
 	{
@@ -222,9 +223,9 @@ char* sampleToBits(Sample sample)
 	return streamline;
 }
 
-char* chunkToBits(Chunk chunk)
+char* chunkToBits(Chunk chunk, huge_t *bitStreamSize)
 {
-	long int slots = 0;
+	huge_t slots = 0;
 	int i, j, k = 0;
 	char *stream;
 
@@ -233,6 +234,7 @@ char* chunkToBits(Chunk chunk)
 		slots += chunk.samples[i].size;
 	}
 
+	*bitStreamSize = slots;
 	stream = (char*) malloc(slots * sizeof(char));
 
 	for (i = 0; i < chunk.size; i++)
@@ -425,12 +427,9 @@ Sample unsignedDifference(Sample a, Sample b)
 /* O mesmo que a operação a - b */
 Sample difference(Sample a, Sample b)
 {
-	int size;
 	Sample differenceSample;
 
 	if (a.size != b.size) printf("[Difference] Warning: a and b sizes do not match.\n");
-
-	size = a.size;
 
 	/*if (size == 8)
 	{
@@ -555,8 +554,9 @@ char* differentialEncoding(char* stream, int n, int bitsPerSample)
 {
 	Chunk streamChunk, differenceChunk;
 	char* encodedStream;
+	huge_t bitStreamSize;
 
-	streamChunk = bitsToChunk(stream, bitsPerSample, n);
+	streamChunk = bitsToChunk(stream, n, bitsPerSample);
 
 	//printf("Before encoding\n");
 	//printChunk(streamChunk);
@@ -566,7 +566,7 @@ char* differentialEncoding(char* stream, int n, int bitsPerSample)
 	//printf("\nAfter encoding\n");
 	//printChunk(differenceChunk);
 
-	encodedStream = chunkToBits(differenceChunk);
+	encodedStream = chunkToBits(differenceChunk, &bitStreamSize);
 
 	destroyChunk(&streamChunk);
 	destroyChunk(&differenceChunk);
@@ -580,8 +580,9 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 {
 	Chunk streamChunk, sumChunk;
 	char* decodedStream;
+	huge_t bitStreamSize;
 
-	streamChunk = bitsToChunk(stream, bitsPerSample, n);
+	streamChunk = bitsToChunk(stream, n, bitsPerSample);
 
 	//printf("Before decoding\n");
 	//printChunk(streamChunk);
@@ -590,7 +591,7 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 	//printf("\nAfter decoding\n");
 	//printChunk(sumChunk);
 
-	decodedStream = chunkToBits(sumChunk);
+	decodedStream = chunkToBits(sumChunk, &bitStreamSize);
 
 	destroyChunk(&streamChunk);
 	destroyChunk(&sumChunk);
@@ -810,4 +811,74 @@ void invertEndianess(char* bitStream, huge_t size, int bitsPerSample)
 			bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)] = aux;
 		}
 	}
+}
+
+int reduceSample(Sample* sample, int bitsPerSample)
+{
+	int i;
+
+	if(sample->size == bitsPerSample) return bitsPerSample;
+
+	for (i = 0; i < bitsPerSample; i++)
+	{
+		sample->data[i] = sample->data[i + sample->size - bitsPerSample];
+	}
+
+	sample->size = bitsPerSample;
+	return bitsPerSample;
+}
+
+void expandSample(Sample* sample, int bitsPerSample)
+{
+	char* sampleData;
+	int i;
+
+	sampleData = (char*) malloc(bitsPerSample * sizeof(char));
+
+	for (i = 0; i < sample->size; i++)
+	{
+		sampleData[i + bitsPerSample - sample->size] = sample->data[i];
+	}
+
+	i = bitsPerSample - sample->size - 1;
+
+	while(i >= 0)
+	{
+		sampleData[i] = sample->data[0];
+		i--;
+	}
+
+	free(sample->data);
+
+	sample->data = sampleData;
+	sample->size = bitsPerSample;
+}
+
+int reduceChunk(Chunk* chunk)
+{
+	int i, newSize;
+
+	newSize = minimumRepresentationSizeInBits(*chunk);
+	printf("New size: %d\n", newSize);
+
+	for (i = 0; i < chunk->size; i++)
+	{
+		reduceSample(&chunk->samples[i], newSize);
+	}
+
+	return newSize;
+}
+
+int expandChunk(Chunk* chunk, int bitsPerSample)
+{
+	int i, oldSize;
+
+	oldSize = chunk->samples[0].size;
+
+	for (i = 0; i < chunk->size; i++)
+	{
+		expandSample(&chunk->samples[i], bitsPerSample);
+	}
+
+	return oldSize;
 }

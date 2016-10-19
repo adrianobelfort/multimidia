@@ -535,9 +535,33 @@ void testK()
 	printf("\n");
 }
 
+void testL()
+{
+	char sample[] = {0,0,0,0,0,1,0,1, 0,0,0,0,1,0,1,0, 0,0,0,0,1,0,1,1, 0,0,0,0,0,1,1,1, 1,1,1,1,1,0,1,0};
+	int size = 40;
+	Chunk chunk;
+
+	chunk = bitsToChunk(sample, size, 8);
+
+	printf("Original chunk:\n");
+	printChunk(chunk);
+
+	reduceChunk(&chunk);
+
+	printf("Reduced chunk:\n");
+	printChunk(chunk);
+
+	expandChunk(&chunk, 8);
+
+	printf("Expanded chunk:\n");
+	printChunk(chunk);
+
+	destroyChunk(&chunk);
+}
+
 int main(int argc, char* argv[])
 {
-	testH();
+	testL();
 
 	return 0;
 }
