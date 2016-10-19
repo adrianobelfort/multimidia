@@ -833,6 +833,8 @@ void expandSample(Sample* sample, int bitsPerSample)
 	char* sampleData;
 	int i;
 
+	if (sample->size == bitsPerSample) return;
+
 	sampleData = (char*) malloc(bitsPerSample * sizeof(char));
 
 	for (i = 0; i < sample->size; i++)
