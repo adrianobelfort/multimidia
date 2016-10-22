@@ -102,13 +102,18 @@ void printEncodeHeader(enc_hdr header)
 	return charStream;
 }*/
 
-char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize)
+char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize, short *outstandingBits)
 {
 	huge_t i;
 	int shift;
 	char *charStream;
+	short leftoverBits;
 
 	*charStreamSize = size / BITS_PER_BYTE;
+	leftoverBits = size % BITS_PER_BYTE;
+
+	if (leftoverBits != 0) *charStreamSize += 1;
+	*outstandingBits = leftoverBits;
 
 	charStream = (char*) calloc(*charStreamSize, sizeof(char));
 
@@ -140,13 +145,13 @@ char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize
 	return bitStream;
 }*/
 
-char* charStreamToBitStream(char* charStream, huge_t size, huge_t *bitStreamSize)
+char* charStreamToBitStream(char* charStream, huge_t size, huge_t *bitStreamSize, short outstandingBits)
 {
 	huge_t i;
 	int shift;
 	char* bitStream;
 
-	*bitStreamSize = size * BITS_PER_BYTE;
+	*bitStreamSize = size * BITS_PER_BYTE - (BITS_PER_BYTE - outstandingBits);
 
 	bitStream = (char*) malloc(*bitStreamSize * sizeof(char));
 
@@ -180,7 +185,7 @@ char* extractFile(FILE* filePointer, wav_hdr* header, huge_t *dataBitsSize)
 	*header = readHeader(filePointer);
 	dataBytes = readData(filePointer, header);
 
-	dataBits = charStreamToBitStream(dataBytes, header->Subchunk2Size, dataBitsSize);
+	dataBits = charStreamToBitStream(dataBytes, header->Subchunk2Size, dataBitsSize, 0);
 
 	free(dataBytes);
 	return dataBits;
@@ -194,7 +199,7 @@ char* extractEncodedFile(FILE* filePointer, wav_hdr* header, enc_hdr *encodeHead
 	*encodeHeader = readEncodeHeader(filePointer);
 	dataBytes = readData(filePointer, header);
 
-	dataBits = charStreamToBitStream(dataBytes, header->Subchunk2Size, dataBitsSize);
+	dataBits = charStreamToBitStream(dataBytes, header->Subchunk2Size, dataBitsSize, 0);
 
 	free(dataBytes);
 	return dataBits;

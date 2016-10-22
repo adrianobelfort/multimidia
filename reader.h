@@ -20,9 +20,9 @@ enc_hdr readEncodeHeader(FILE* file);
 
 void printEncodeHeader(enc_hdr header);
 
-char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize);
+char* bitStreamToCharStream(char* bitStream, huge_t size, huge_t* charStreamSize, short *outstandingBits);
 
-char* charStreamToBitStream(char* charStream, huge_t size, huge_t *bitStreamSize);
+char* charStreamToBitStream(char* charStream, huge_t size, huge_t *bitStreamSize, short outstandingBits);
 
 char* readData(FILE* file, wav_hdr* header);
 

@@ -2,8 +2,10 @@
 #define __DIFFERENTIAL_BASE_H__
 
 #include <stdint.h>
+#include "differential.h"
 
 #define huge_t unsigned long long
+#define large_t unsigned long
 
 /********************** ORGANIZAÇÃO ESTRUTURAL DOS DADOS **********************/
 
@@ -138,12 +140,43 @@ int minimumRepresentationSizeInBits(Chunk chunk);
 
 // NOVAS
 
-int reduceSample(Sample* sample, int bitsPerSample);
+short reduceSample(Sample* sample, short bitsPerSample);
 
-void expandSample(Sample* sample, int bitsPerSample);
+short expandSample(Sample* sample, short bitsPerSample);
 
-int reduceChunk(Chunk* chunk);
+short reduceChunk(Chunk* chunk);
 
-int expandChunk(Chunk* chunk, int bitsPerSample);
+short expandChunk(Chunk* chunk, short bitsPerSample);
+
+Chunk* chunkedDifferentialEncodingWithChannels(Sample* samples, large_t numberOfSamples, unsigned short channels);
+
+char* chunkArrayToBits(Chunk *chunks, large_t numberOfChunks, huge_t *streamSize);
+
+Chunk* bitsToChunkArray(char* stream, huge_t size, unsigned short channels, large_t numberOfSamples, short *bitsPerSample);
+
+char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, int bitsPerSample,
+	unsigned short channels, large_t *numberOfSamples, short* newBitsPerChannel, huge_t* compressedStreamSize);
+
+huge_t sizeOfChunk(Chunk chunk);
+
+Sample* chunkedDifferentialDecodingWithChannels(Chunk* encodedChunks, unsigned short channels,
+	large_t *numberOfSamples);
+
+char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, short* bitsPerSample,
+	unsigned short channels, large_t numberOfSamples, int oldBitsPerSample, huge_t* decompressedStreamSize);
+
+StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPerChannel,
+	unsigned short channels, short originalBitsPerSample);
+
+DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample,
+	int32_t *initialSamples);
+
+void destroyDifferentialHeader(DifferentialHeader header);
+
+DifferentialHeader readDifferentialHeader(FILE* file);
+
+void writeDifferentialHeader(DifferentialHeader header, FILE* file);
+
+void printDifferentialHeader(DifferentialHeader header);
 
 #endif
