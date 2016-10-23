@@ -1,11 +1,3 @@
-//
-//  List.c
-//  Encoder
-//
-//  Created by Henrique de Almeida Machado da Silveira on 10/12/16.
-//  Copyright © 2016 HenriSilver. All rights reserved.
-//
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "List.h"

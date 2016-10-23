@@ -1,11 +1,3 @@
-//
-//  List.h
-//  Encoder
-//
-//  Created by Henrique de Almeida Machado da Silveira on 10/12/16.
-//  Copyright © 2016 HenriSilver. All rights reserved.
-//
-
 #ifndef List_h
 #define List_h
 
