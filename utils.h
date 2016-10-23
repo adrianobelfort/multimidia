@@ -8,6 +8,11 @@
 #define HUFFMAN_MASK 0x2
 #define DIFFERENCE_MASK 0x4
 
+#define huge_t unsigned long long
+#define large_t unsigned long
+
+#define BITS_PER_BYTE 8
+
 /* *** References ***
  * http://soundfile.sapp.org/doc/WaveFormat/
  * http://stackoverflow.com/questions/13660777/c-reading-the-data-part-of-a-wav-file
@@ -27,7 +32,7 @@ typedef struct  WAV_HEADER{
     unsigned short      bitsPerSample;  /* Number of bits per sample */
     char                Subchunk2ID[4]; /* "data"  string */
     unsigned int        Subchunk2Size;  /* Sampled data length */
-    
+
 } wav_hdr;
 
 /* Headers abaixo ja estao alinhados de 8 em 8 bytes */
@@ -40,10 +45,19 @@ typedef struct encodeHeader {
     unsigned int originalFileSize;
 } enc_hdr;
 
-/******* INCLUIR HEADER DE DIFERENCA *******/
-typedef struct differenceHeader {
-    // TO DO
-} dif_hdr;
+/* Headers estático e dinâmico para codificação por diferenças*/
+typedef struct
+{
+	large_t numberOfSamplesPerChannel;
+	unsigned short channels;
+	short originalBitsPerSample;
+} StaticDifferentialHeader;
+
+typedef struct
+{
+	StaticDifferentialHeader sheader;
+	short *encodedBitsPerSample;
+} DifferentialHeader;
 
 /* Header presente no caso de haver codificacao Runlength */
 typedef struct runlengthHeader {

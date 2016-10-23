@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include "differential.h"
 
-#define huge_t unsigned long long
-#define large_t unsigned long
+/*#define huge_t unsigned long long
+#define large_t unsigned long*/
 
 /********************** ORGANIZAÇÃO ESTRUTURAL DOS DADOS **********************/
 
@@ -41,6 +41,10 @@ void killSample(Sample* sample);
 
 void destroySampleArray(Sample* samples, int n);
 
+short reduceSample(Sample* sample, short bitsPerSample);
+
+short expandSample(Sample* sample, short bitsPerSample);
+
 /********************* MANIPULAÇÃO DE BLOCOS DE AMOSTRAS *********************/
 
 void initializeChunk(Chunk* chunk, int capacity);
@@ -56,6 +60,10 @@ Chunk* newChunk(int capacity);
 void killChunk(Chunk* chunk);
 
 void destroyChannels(Chunk* chunks, int channels);
+
+short reduceChunk(Chunk* chunk);
+
+short expandChunk(Chunk* chunk, short bitsPerSample);
 
 /**************************** MANIPULAÇÃO DE CANAIS ****************************/
 
@@ -101,6 +109,10 @@ char* numberToBits(int32_t number, int bits);
 
 Sample numberToSample(int32_t number, int bitsPerSample);
 
+char* chunkArrayToBits(Chunk *chunks, large_t numberOfChunks, huge_t *streamSize);
+
+Chunk* bitsToChunkArray(char* stream, huge_t size, unsigned short channels, large_t numberOfSamples, short *bitsPerSample);
+
 /********************** ARITMÉTICA BOOLEANA **********************/
 
 int sumBits(char* a, char* b, char* result, int n);
@@ -138,44 +150,28 @@ int minimumSampleSizeInBits(Sample sample);
 
 int minimumRepresentationSizeInBits(Chunk chunk);
 
-// NOVAS
+huge_t sizeOfChunk(Chunk chunk);
 
-short reduceSample(Sample* sample, short bitsPerSample);
-
-short expandSample(Sample* sample, short bitsPerSample);
-
-short reduceChunk(Chunk* chunk);
-
-short expandChunk(Chunk* chunk, short bitsPerSample);
+/*************************** CODIFICAÇÃO E DECODIFICAÇÃO ***************************/
 
 Chunk* chunkedDifferentialEncodingWithChannels(Sample* samples, large_t numberOfSamples, unsigned short channels);
-
-char* chunkArrayToBits(Chunk *chunks, large_t numberOfChunks, huge_t *streamSize);
-
-Chunk* bitsToChunkArray(char* stream, huge_t size, unsigned short channels, large_t numberOfSamples, short *bitsPerSample);
-
-char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, int bitsPerSample,
-	unsigned short channels, large_t *numberOfSamples, short* newBitsPerChannel, huge_t* compressedStreamSize);
-
-huge_t sizeOfChunk(Chunk chunk);
 
 Sample* chunkedDifferentialDecodingWithChannels(Chunk* encodedChunks, unsigned short channels,
 	large_t *numberOfSamples);
 
-char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, short* bitsPerSample,
-	unsigned short channels, large_t numberOfSamples, int oldBitsPerSample, huge_t* decompressedStreamSize);
+/*********************** MANIPULAÇÃO DE CABEÇALHO ***********************/
 
-StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPerChannel,
+/* StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPerChannel,
 	unsigned short channels, short originalBitsPerSample);
 
 DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample);
 
 void destroyDifferentialHeader(DifferentialHeader header);
 
-DifferentialHeader readDifferentialHeader(FILE* file);
+DifferentialHeader readDifferentialHeader(FILE* file); REMOVE
 
-void writeDifferentialHeader(DifferentialHeader header, FILE* file);
+void writeDifferentialHeader(DifferentialHeader header, FILE* file);  REMOVE
 
-void printDifferentialHeader(DifferentialHeader header);
+void printDifferentialHeader(DifferentialHeader header); */
 
 #endif
