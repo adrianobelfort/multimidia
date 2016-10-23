@@ -168,8 +168,7 @@ char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, 
 StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPerChannel,
 	unsigned short channels, short originalBitsPerSample);
 
-DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample,
-	int32_t *initialSamples);
+DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample);
 
 void destroyDifferentialHeader(DifferentialHeader header);
 

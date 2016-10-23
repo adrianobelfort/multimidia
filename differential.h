@@ -17,7 +17,7 @@ typedef struct
 {
 	StaticDifferentialHeader sheader;
 	short *encodedBitsPerSample;
-	int32_t *initialSamples;
+	//int32_t *initialSamples;
 } DifferentialHeader;
 
 char* differentialEncoding(char* stream, int n, int bitsPerSample);
