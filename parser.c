@@ -83,10 +83,13 @@ int parseArguments(int argc, char* argv[], struct arguments *arguments, char mod
             }
         }
     } else {
-        if((argc != 3 && argc != 4 )|| strcmp(argv[1], "-v") != 0)
+        if(argc > 4)
             return showErrorMessageDecode();
-        if(argc == 4)
+        
+        if(argc == 4 && strcmp(argv[1], "-v") == 0)
             arguments->verbose = 1;
+        else if(argc == 4 && strcmp(argv[1], "-v") != 0)
+            return showErrorMessageDecode();
     }
     
     arguments->input = argv[argc-2];
