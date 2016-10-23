@@ -2,8 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "List.h"
-
-#define BITS_PER_CHAR 8
+#include "utils.h"
 
 /* Funcao utilizada pelo qsort para ordenar os TreeNodes da fila em ordem crescente.
  * O qsort necessita de uma funcao de comparacao definida como int (*compareFrequencies)(const void*,const void*)
@@ -71,6 +70,13 @@ TreeNode *createTree(unsigned int *frequencies , unsigned int maxValue) {
         }
     }
     
+    if(DEBUG_FLAG) {
+        printf("\n");
+        for(i = 0; i < position; i++) {
+            printf("(%lu, %d)\n", queue[i]->value, queue[i]->frequency);
+        }
+    }
+    
     /* Enquanto a arvore nao estiver formada, havendo apenas uma raiz */
     while(position > 1)
     {
@@ -78,6 +84,8 @@ TreeNode *createTree(unsigned int *frequencies , unsigned int maxValue) {
          * filhas disponiveis no momento.
          */
         TreeNode *newNode = (TreeNode *) malloc(sizeof(TreeNode));
+        
+        newNode->value = -1;
         
         /* Utilização do qsort para ordenar a fila de frequencias:
          * A funcao compareFrequencies e passada como parametro para qsort
@@ -263,15 +271,29 @@ char *huffmanEncode(char *data, unsigned long long int size, unsigned int bitsPe
     return huffmanData;
 }
 
+void preOrder(TreeNode *tree) {
+    if(tree==NULL)
+        return;
+    preOrder(tree->left);
+    printf("\n(%lu, %d)\n", tree->value, tree->frequency);
+    preOrder(tree->right);
+}
+
 /* Decodifica um stream de bits que foi codificado utilizando o codigo de Huffman */
 char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffmanFrequenciesCount, unsigned int huffmanMaxValue, unsigned int * frequencyArray, unsigned long long int *huffmanSize) {
     
     /* A arvore de Huffman e criada a partir das frequencias */
     TreeNode *tree = createTree(frequencyArray, huffmanMaxValue+1), *aux;
+    
+    if(DEBUG_FLAG) {
+        preOrder(tree);
+    }
+    
     List *values = create();
     
     *huffmanSize = 0;
     unsigned long long int i = 0, j = 0;
+    unsigned long long test = 0;
     unsigned long value;
     unsigned int numBits;
     aux = tree;
@@ -295,15 +317,21 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
         else {
             add(aux->value, values);
             (*huffmanSize) += BITS_PER_CHAR;
+            test += BITS_PER_CHAR;
             aux = tree;
         }
+    }
+    
+    if(DEBUG_FLAG) {
+        printf("\n\ni - %llu\ndatabits Size - %llu\n\n", i, size);
+        printf("\n\nHuffmanSize - %llu\n\n", *huffmanSize);
     }
     
     /* O vetor para stream de bits decodificados e criado */
     char * huffmanDecoded = (char *) malloc(*huffmanSize * sizeof(char));
     
     Node *it = values->head;
-    
+
     /* A lista criada com os valores e percorrida e os valors vao sendo escritos
      * no stream por meio de sua representacao binaria
      */
@@ -315,7 +343,7 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
         if(value != 0){
             
             while(value && numBits) {
-                
+               
                 huffmanDecoded[j + --numBits] = value % 2;
                 value = value/2;
             }
@@ -335,6 +363,3 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
     clearTree(tree);
     return huffmanDecoded;
 }
-
-
-

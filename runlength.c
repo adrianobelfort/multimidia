@@ -1,6 +1,5 @@
 #include "runlength.h"
-
-#define BITS_PER_CHAR 8
+#include "utils.h"
 
 /* Funcao utilizada para obter-se o numero de bits necessario para
  * representr um certo numero "number"
@@ -205,5 +204,3 @@ char *runlengthDecode(char *data, unsigned long long int size, unsigned int numB
     
     return dataBits;
 }
-
-

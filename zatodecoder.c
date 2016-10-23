@@ -1,312 +1,426 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "parser.h"
-#include "utils.h"
+#include "huffman.h"
 #include "List.h"
-#include "differential.h"
+#include "parser.h"
+#include "runlength.h"
+#include "utils.h"
 
-#define RUNLENGTH_MASK 0x1
-#define HUFFMAN_MASK 0x2
-#define DIFFERENCE_MASK 0x4
-
-// Le o header do arquivo .wav e encontra o tamanho do arquivo
-wav_hdr *readHeader(FILE *input, int *fileSize) {
+/* Le o header do arquivo .wav e encontra o tamanho do arquivo */
+wav_hdr *readHeader(FILE *input, unsigned int *fileSize) {
     wav_hdr* header = (wav_hdr *) malloc(sizeof(wav_hdr));
-
+    
     fseek(input, 0, SEEK_END);
-
+    
     *fileSize = (int) ftell(input);
-
+    
     fseek(input, 0, SEEK_SET);
-
+    
     fread(header, sizeof(wav_hdr), 1, input);
-
-    printf("File size: %d bytes\n", *fileSize);
-    printf("ChunkID: %s\n", header->RIFF);
-    printf("ChunkSize: %u\n", header->ChunkSize);
-    printf("AudioFormat: %d\n", header->AudioFormat);
-    printf("NumOfChan: %d\n", header->NumOfChan);
-    printf("SamplesPerSec: %u\n", header->SamplesPerSec);
-    printf("bytesPerSec: %u\n", header->bytesPerSec);
-    printf("bitsPerSample: %hu\n", header->bitsPerSample);
-    printf("SubChunk2Size (data): %u\n", header->Subchunk2Size);
-
+    
+    if(DEBUG_FLAG) {
+        printf("File size: %u bytes\n", *fileSize);
+        printf("ChunkID: %s\n", header->RIFF);
+        printf("ChunkSize: %u\n", header->ChunkSize);
+        printf("AudioFormat: %d\n", header->AudioFormat);
+        printf("NumOfChan: %d\n", header->NumOfChan);
+        printf("SamplesPerSec: %u\n", header->SamplesPerSec);
+        printf("bytesPerSec: %u\n", header->bytesPerSec);
+        printf("bitsPerSample: %hu\n", header->bitsPerSample);
+        printf("SubChunk2Size (data): %u\n", header->Subchunk2Size);
+    }
+    
     return header;
 }
 
-enc_hdr *readEncodeHeader(FILE *input) {
+/* Le o header geral de compressao */
+enc_hdr *readEncodeHeader(FILE *input, struct arguments *arguments) {
     enc_hdr* header = (enc_hdr *) malloc(sizeof(enc_hdr));
-
+    
     fseek(input, sizeof(wav_hdr), SEEK_SET);
-
+    
     fread(header, sizeof(enc_hdr), 1, input);
+    
+    if(header->encodeType & HUFFMAN_MASK) {
+        arguments->huffman = 1;
+    }
+    
+    if(header->encodeType & RUNLENGTH_MASK) {
+        arguments->runlength = 1;
+    }
+    
+    if(header->encodeType & DIFFERENCE_MASK) {
+        arguments->difference = 1;
+    }
+    
+    if(DEBUG_FLAG) {
+        printf("Encode Mode: %u\n", header->encodeType);
+        printf("TotalLength: %llu\n", header->totalLength);
+        printf("Original File Size: %u\n", header->originalFileSize);
+    }
+    
+    return header;
+}
 
-    printf("Encode Mode: %d\n", header->encodeType);
-    printf("RunlengthNumBits: %u\n", header->runlengthNumBits);
-    printf("TotalLength: %llu\n", header->totalLength);
-	printf("Difference length: %llu\n", header->differenceLength);
+/* Le o header de compressao por diferenca */
+dif_hdr *readDifferenceHeader(FILE *input) {
+    dif_hdr* header = (dif_hdr *) malloc(sizeof(dif_hdr));
+    
+    long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
+    
+    fseek(input, seekSize, SEEK_SET);
+    
+    fread(header, sizeof(dif_hdr), 1, input);
+    
+    return header;
+}
+
+/* Le o header de compressao por runlength */
+run_hdr *readRunlengthHeader(FILE *input, struct arguments *arguments) {
+    run_hdr* header = (run_hdr *) malloc(sizeof(run_hdr));
+    
+    long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
+    
+    if(arguments->difference) {
+        seekSize += sizeof(dif_hdr);
+    }
+    
+    fseek(input, seekSize, SEEK_SET);
+    
+    fread(header, sizeof(run_hdr), 1, input);
+    
+    if(DEBUG_FLAG) {
+        printf("Runlength Numbits: %u\n", header->runlengthNumBits);
+        printf("Runlength Padding: %u\n", header->runlengthPadding);
+    }
 
     return header;
 }
 
-char *readData(FILE *input, wav_hdr *header, enc_hdr *encodeHeader) {
+/* Le o header de compressao por Huffman */
+huf_hdr *readHuffmanHeader(FILE *input, struct arguments *arguments) {
+    huf_hdr* header = (huf_hdr *) malloc(sizeof(huf_hdr));
+    
+    long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
+    
+    if(arguments->difference) {
+        seekSize += sizeof(dif_hdr);
+    }
+    
+    if(arguments->runlength) {
+        seekSize += sizeof(run_hdr);
+    }
+    
+    fseek(input, seekSize, SEEK_SET);
+    
+    fread(header, sizeof(huf_hdr), 1, input);
+    
+    if(DEBUG_FLAG) {
+        printf("Huffman Frequencies Count: %u\n", header->huffmanFrequenciesCount);
+        printf("Huffman Max Value: %u\n", header->huffmanMaxValue);
+    }
+    
+    return header;
+}
 
-    // Aloca um vetor de chars, sendo que cada um representa um bit.
-    // Por isso o tamanho é Subchunk2Size * BITS_PER_CHAR, já que
-    // um char tem um byte.
+char *readData(FILE *input, wav_hdr *header, enc_hdr *encodeHeader, struct arguments *arguments, huf_hdr *huffmanHeader, unsigned int **frequencyArray) {
+    
+    long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
+    
+    if(arguments->difference) {
+        seekSize += sizeof(dif_hdr);
+    }
+    
+    if(arguments->runlength) {
+        seekSize += sizeof(run_hdr);
+    }
+    
+    if(arguments->huffman) {
+        seekSize += sizeof(huf_hdr);
+    }
+    
+    /* Aloca um vetor de chars, sendo que cada um representa um bit.
+     * Por isso o tamanho é Subchunk2Size * BITS_PER_CHAR, já que
+     * um char tem um byte.
+     */
     char *dataBits = (char *) malloc(encodeHeader->totalLength * BITS_PER_CHAR);
-
-    // Vetor dos bytes lidos originalmente do arquivo
+    
+    /* Vetor dos bytes lidos originalmente do arquivo */
     char *originalData = (char *) malloc(encodeHeader->totalLength);
-
-    // Prepara o offset para leitura dos dados do arquivo,
-    // pulando o header
-    fseek(input, sizeof(wav_hdr)+sizeof(enc_hdr), SEEK_SET);
-
-
+    
+    /* Prepara o offset para leitura dos dados do arquivo, pulando os headers */
+    fseek(input, seekSize, SEEK_SET);
+    
+    /* Le o vetor de frequencias para o caso de codificacao Huffman*/
+    if(arguments->huffman) {
+        unsigned int index, value;
+        unsigned int * fArray = (unsigned int *) malloc((huffmanHeader->huffmanMaxValue+1) * sizeof(unsigned int));
+        unsigned int i;
+        
+        for(i = 0; i < huffmanHeader->huffmanMaxValue+1; i++) {
+            fArray[i] = 0;
+        }
+        
+        for(i = 0; i < huffmanHeader->huffmanFrequenciesCount; i++) {
+            fread(&index, sizeof(unsigned int), 1, input);
+            fread(&value, sizeof(unsigned int), 1, input);
+            fArray[index] = value;
+            if(DEBUG_FLAG) {
+                printf("%u - %u\n", index, value);
+            }
+        }
+        *frequencyArray = fArray;
+    }
+    
+    /* Le os dados comprimidos */
     fread(originalData, encodeHeader->totalLength, 1, input);
-
-    // Mascara utilizada para isolar bits
+    
+    /* Mascara utilizada para isolar bits */
     char mask = 0x1;
+    
     unsigned long long int i;
-    int currentBitPosition; // Atual posicao do bit dentro de um byte
-    int dataBitsPosition = 0; // Posicao no vetor dataBits
-    int shift; // Quantidade a ser deslocada na operacao bitshift
-
-    // Para todos os bytes lidos do arquivo
+    
+    /* Atual posicao do bit dentro de um byte */
+    int currentBitPosition;
+    
+    /* Posicao no vetor dataBits */
+    int dataBitsPosition = 0;
+    
+    /* Quantidade a ser deslocada na operacao bitshift */
+    int shift;
+    
+    /* Para todos os bytes lidos do arquivo */
     for(i = 0; i < encodeHeader->totalLength; i++) {
-        // Seleciona o byte atual
+        /* Seleciona o byte atual */
         char currValue = originalData[i];
-        // Inicializa a posicao de bit no byte atual
+        /* Inicializa a posicao de bit no byte atual */
         currentBitPosition = 0;
-        // Para todos os bits no byte
+        /* Para todos os bits no byte */
         while(currentBitPosition < BITS_PER_CHAR) {
-            // Calcula o shift que deve ser feito
+            /* Calcula o shift que deve ser feito */
             shift = BITS_PER_CHAR - 1 - currentBitPosition++;
-            // Isola o bit do byte e atribui a posicao do vetor dataBits
+            /* Isola o bit do byte e atribui a posicao do vetor dataBits */
             dataBits[dataBitsPosition++] = (currValue & (mask << shift)) >> shift;
         }
     }
-
+    
     free(originalData);
     return dataBits;
 }
 
+/* Funcao que auxilia na inicializacao dos descritores de arquivos */
 int openFiles(FILE **input, FILE **output, char *inputName, char *outputName) {
-
+    
     *input = fopen(inputName, "r");
     if(*input == NULL) {
         printf("Could not open wave file %s\n", inputName);
         return EXIT_FAILURE;
     }
-
+    
     *output = fopen(outputName, "w");
     if(*output == NULL) {
         printf("Could not open wave file %s\n", outputName);
         return EXIT_FAILURE;
     }
-
+    
     return EXIT_SUCCESS;
 }
 
-unsigned int findNumBits(unsigned long long int number) {
-    unsigned int bit = sizeof(unsigned long long) * BITS_PER_CHAR - 1;
-    unsigned int mask = 0x1;
-
-    while(!((number & (mask << bit)) >> bit)) {
-        bit--;
-    }
-    return bit+1;
-}
-
-char *convertRunLengthToBits(unsigned long long int totalBitsLength, unsigned long long int *samples, unsigned long int numberSamples) {
-
-    char *runLengthBits = (char *) malloc(totalBitsLength);
-
-    unsigned long int i;
-    unsigned long long int j, offset = 0;
-    unsigned int current = 0;
-
-    for(i = 0; i < numberSamples; i++) {
-        for(j = 0; j < samples[i]; j++) {
-            runLengthBits[offset + j] = current;
-        }
-
-        offset += j;
-
-        if(current == 1)
-            current = 0;
-        else
-            current = 1;
-    }
-
-    return runLengthBits;
-}
-
-
-
-char *runlength(char *data, unsigned long long int size, unsigned int numBits, unsigned long long int *totalBitsLength) {
-
-    unsigned long long int i;
-	size = size - (size % numBits);
-    unsigned long long int numberSamples = size/numBits;
-    printf("\n\n\nnumSamples - %llu\nSize - %llu\nnumbits - %u\n\n\n", numberSamples, size, numBits);
-    unsigned int currBit = 0, shift;
-    unsigned long long int currValue = 0, j = 0;
-    *totalBitsLength = 0;
-
-    unsigned long long int *runlengthSamples = (unsigned long long int *) malloc(numberSamples*sizeof(unsigned long long int));
-
-    for(i = 0; i < numberSamples; i++) {
-    	runlengthSamples[i] = 0;
-    }
-
-    //printf("\n\ncurrValue: %llu\n\n", currValue);
-    for(i = 0; i < size; i++) {
-        if(currBit == numBits)
-        {
-            //printf("\n\ncurrValue: %llu\n\n", currValue);
-            *totalBitsLength += currValue;
-            runlengthSamples[j++] = currValue;
-            currBit = 0;
-            currValue = 0;
-        }
-
-        shift = numBits - 1 - currBit++;
-        //printf("\n\ncurrBit: %u\n\n", currBit);
-        currValue |= data[i] << shift;
-    }
-
-    /*if(currValue != 0) {
-        runlengthSamples[j++] = currValue;
-        *totalBitsLength += currValue;
-    }*/
-
-    //printf("\n\n\n%llu\n\n\n", *totalBitsLength * sizeof(char));
-    char *dataBits = convertRunLengthToBits(*totalBitsLength * sizeof(char), runlengthSamples, numberSamples);
-
-    return dataBits;
-}
-
-// AQUI, FALTA IMPLEMENTAR NOSSO PROPRIO HEADER. A IDEIA EH USAR UM CHAR
-// OU UM INT PARA DIZER QUAIS OS TIPOS DE COMPRESSÃO FEITOS. APÓS O HEADER
-// ORIGINAL, ANTES DOS DADOS, COLOCAMOS ESSE NOSSO "HEADER"
-int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size) {
-
-    // 1 e o numero de elementos a serem escritos. 1 header apenas
+/* Escreve os dados descomprimidos no arquivo de saida */
+int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long int size, unsigned int originalFileSize) {
+    
+    /* 1 e o numero de elementos a serem escritos. 1 header apenas */
     if(fwrite(header, sizeof(wav_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-
-    char *byteData = (char *) malloc(size/BITS_PER_CHAR);
+    
+    if(DEBUG_FLAG) {
+        printf("\n\nSize - %llu\n\n", size);
+    }
+    
+    unsigned int byteDataSize = originalFileSize-sizeof(wav_hdr);
+    char *byteData = (char *) malloc(byteDataSize * sizeof(char));
     unsigned long long int i, j = 0;
     char currByte = 0;
     int currBit = 0;
     int shift;
+    
+    for(i = 0; i < byteDataSize; i++)
+    {
+        byteData[i] = 0;
+    }
+    
     for(i = 0; i < size; i++) {
         if(currBit == BITS_PER_CHAR) {
             currBit = 0;
             byteData[j++] = currByte;
             currByte = 0;
         }
-
+        
         shift = BITS_PER_CHAR - 1 - currBit++;
-        // Isola o bit do byte e atribui a posicao do vetor dataBits
+        /* Isola o bit do byte e atribui a posicao do vetor dataBits */
         currByte |= data[i] << shift;
     }
-
-    /*if(currByte != 0)
-        byteData[j++] = currByte;*/
-
-    if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
+    
+    if(fwrite(byteData, originalFileSize-sizeof(wav_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-    //printf("\n\n\nJ FINAL - %llu\n\n\nSIZE - %llu\n\n\n", j, size);
-    free(byteData);
 
+    free(byteData);
+    
     return EXIT_SUCCESS;
 }
 
-int main (int argc, char* argv[])
-{
-	struct arguments arguments;
-	char verbose;
-
-	parseArguments(argc, argv, &arguments);
-	verbose = arguments.verbose;
-
-	if (verbose)
-	{
-		printf("Input file is %s\n", arguments.input);
-		printf("Output file is %s\n", arguments.output);
-	}
-
-	/* Lógica principal */
-
-	FILE *input = NULL, *output = NULL; // descritores dos arquivos de entrada e saída a ser processado
-    int fileSize; // tamanho total do arquivo
-
+int main(int argc, char **argv) {
+    /* Descritores dos arquivos de entrada e saída a serem processados */
+    FILE *input, *output;
+    /* Struct que representa os argumentos da linha de comando */
+    struct arguments arguments;
+    /* tamanho total do arquivo de entrada */
+    unsigned int fileSizeInput;
+    /* Header do WAV */
+    wav_hdr *header;
+    /* Header geral do arquivo comprimido */
+    enc_hdr *encode_header;
+    /* Header da codificacao runlength */
+    run_hdr *runlengthHeader = NULL;
+    /* Header da codificacao Huffman */
+    huf_hdr *huffmanHeader = NULL;
+    /* Header da codificacao por diferenca */
+    dif_hdr *differenceHeader = NULL;
+    /* Vetor que representa o stream de bits que representa o audio original/codificado */
+    char *dataBits;
+    /* Tamanho do vetor dataBits */
+    unsigned long long int dataBitsSize;
+    /* Ponteiro temporario para vetor de dados apos codificacao Runlength */
+    char *runlengthDecoded;
+    /* Numero de bits por amostra da codificacao Runlength */
+    unsigned int runlengthNumBits;
+    /* Tamanho do vetor de dados apos decodificacao runlength */
+    unsigned long long int runlengthBitsSize;
+    /* Padding nos dados apos codificacao runlength para que runlengthSize seja multiplo de 8 */
+    unsigned int runlengthPadding;
+    /* Ponteiro temporario para vetor de dados apos codificacao Huffman */
+    char *huffmanDecoded;
+    /* Tamanho do vetor de dados apos codificacao Huffman */
+    unsigned long long int huffmanSize;
+    /* Vetor de frequencias da codificacao Huffman */
+    unsigned int *frequencyArray;
+    
+    char verbose;
+    
+    input = NULL;
+    output = NULL;
+    runlengthPadding = 0;
+    runlengthNumBits = 0;
+    
+    /* Caso haja algum erro nos argumentos passados ou a opção --help
+     * seja selecionada , termina o programa
+     */
+    if(!parseArguments(argc, argv, &arguments, 'd')) {
+        return 0;
+    }
+    
+    verbose = arguments.verbose;
+    
+    /* Abre os aqrquivos passados como argumento */
     if(openFiles(&input, &output, arguments.input, arguments.output)) {
         return EXIT_FAILURE;
     }
+    
+    /* Leitura do header WAV e calculo do tamanho do arquivo de entrada */
+    header = readHeader(input, &fileSizeInput);
+    
 
-    wav_hdr *header = readHeader(input, &fileSize);
-    enc_hdr *encode_header = readEncodeHeader(input);
-
-    char *dataBits = readData(input, header, encode_header);
-    unsigned long long int dataBitsSize;
-    unsigned long long int runlengthBitsSize;
-
-    // FAZER AQUI AS CHAMADAS PARA AS CODIFICACOES
-    // PROTOTIPO:
-    // char *codificacaoMetodoX(char *input, char* size, int bitsperSample)
-    // A CADA CHAMADA PARA UM METODO DIFERENTE, ATUALIZAMOS INPUT,
-    // SIZE E BITSPERSAMPLE. NUM PRIMEIRO MOMENTO,
-    // INPUT É dataBits, E SIZE E BITSPERSEAMPLE DIZEM RESPEITO AOS
-    // DADOS DO ARQUIVO DE ENTRADA. DEPOIS, APOS A PRIMEIRA
-    // CODIFICACAO, ESSES DADOS SAO ATUALIZADOS.
-
-	//dataBitsSize = encode_header->differenceLength * BITS_PER_CHAR; // inicializacao
-
-    if(encode_header->encodeType & RUNLENGTH_MASK)
-	{
-		if (verbose) printf("Running run-length decoding...\n");
-
-		dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
-		printf("ORIGINAL DATA BITS SIZE: %llu\n", dataBitsSize);
-        char *runlengthDecoded = runlength(dataBits, dataBitsSize, encode_header->runlengthNumBits, &runlengthBitsSize);
+    encode_header = readEncodeHeader(input, &arguments);
+    
+    /* Caso nenhuma das tecnicas de codificacao tenha sido passada,
+     * nao ha nada a ser feito.
+     */
+    if (!(arguments.huffman || arguments.runlength || arguments.difference) != 0)
+    {
+        printf("Nothing to do.\n");
+        return 0;
+    }
+    
+    if (verbose)
+    {
+        printf("Is input file Huffman-compressed? %s\n", arguments.huffman == 1 ? "yes" : "no");
+        printf("Is input file run-length-compressed? %s\n", arguments.runlength == 1 ? "yes" : "no");
+        printf("Is input file differential-compressed? %s\n", arguments.difference == 1 ? "yes" : "no");
+        printf("Input file is %s\n", arguments.input);
+        printf("Output file is %s\n", arguments.output);
+        printf("\n");
+    }
+    
+    /* Le os header de diferenca, runlength e huffman caso tais codificacoes
+     * tenham sido feitas
+     */
+    if(arguments.difference) {
+        differenceHeader = readDifferenceHeader(input);
+    }
+    
+    if(arguments.runlength) {
+        runlengthHeader = readRunlengthHeader(input, &arguments);
+    }
+    
+    if(arguments.huffman) {
+        huffmanHeader = readHuffmanHeader(input, &arguments);
+    }
+    
+    /* Inicializa dataBitsSize e dataBits com os valores lidos a partir
+     * do arquivo de entrada
+     */
+    dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
+    
+    dataBits = readData(input, header, encode_header, &arguments, huffmanHeader, &frequencyArray);
+    
+    if(DEBUG_FLAG) {
+        printf("\n\nDataBitsSizeOrig - %llu\n\n", dataBitsSize);
+    }
+    
+    /* Se tiver sido feita a codificacao Huffman, realiza a descodificacao Huffman */
+    if(arguments.huffman) {
+        huffmanDecoded = huffmanDecode(dataBits, dataBitsSize, huffmanHeader->huffmanFrequenciesCount, huffmanHeader->huffmanMaxValue, frequencyArray, &huffmanSize);
         free(dataBits);
-		printf("AFTER RUN LENGTH: %llu\n", runlengthBitsSize);
+        dataBits = huffmanDecoded;
+        dataBitsSize = huffmanSize;
+    }
+    
+    if(DEBUG_FLAG) {
+        printf("\n\nDataBitsSizeHuffi - %llu\n\n", dataBitsSize);
+    }
+    
+    /* Se tiver sido feita a codificacao Runlength, realiza a descodificacao Runlength */
+    if(arguments.runlength) {
+        runlengthDecoded = runlengthDecode(dataBits, dataBitsSize, runlengthHeader->runlengthNumBits, &runlengthBitsSize, runlengthHeader->runlengthPadding);
+        free(dataBits);
         dataBits = runlengthDecoded;
         dataBitsSize = runlengthBitsSize;
     }
-
-	if (encode_header->encodeType & DIFFERENCE_MASK)
-	{
-		if (verbose) printf("Running differential decoding...\n");
-
-		printf("Data bits size: %llu, samples %llu, %llu per channel\n", dataBitsSize,
-			dataBitsSize / (unsigned long long int) encode_header->bitsPerSample,
-			(dataBitsSize / (unsigned long long int) encode_header->bitsPerSample) / (unsigned long long int) encode_header->channels);
-
-		char *differenceDecoded = differentialDecodingWithChannels(dataBits, dataBitsSize,
-			encode_header->channels, encode_header->bitsPerSample);
-
-		free(dataBits);
-		dataBits = differenceDecoded;
-		//dataBitsSize =
-		/* dataBitsSize não muda */
-	}
-
-    if(writeToOutput(output, header, dataBits, dataBitsSize)) {
+    
+    if(DEBUG_FLAG) {
+        printf("\n\nDataBitsSizeRun - %llu\n\n", dataBitsSize);
+    }
+    
+    /* Se tiver sido feita a codificacao por Diferenca, realiza a descodificacao por Diferenca */
+    if(arguments.difference) {
+        /********* TO DO ********/
+    }
+    
+    if(writeToOutput(output, header, dataBits, dataBitsSize, encode_header->originalFileSize)) {
         return EXIT_FAILURE;
     }
-
+    
+    if(encode_header->encodeType & HUFFMAN_MASK) {
+        free(frequencyArray);
+    }
+    
     free(dataBits);
     free(header);
     free(encode_header);
     fclose(input);
     fclose(output);
-
+    
     return EXIT_SUCCESS;
 }

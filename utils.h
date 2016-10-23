@@ -1,7 +1,16 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
+#define DEBUG_FLAG 0
+
 #define BITS_PER_CHAR 8
+#define RUNLENGTH_MASK 0x1
+#define HUFFMAN_MASK 0x2
+#define DIFFERENCE_MASK 0x4
+
+// *** References ***
+// http://soundfile.sapp.org/doc/WaveFormat/
+// http://stackoverflow.com/questions/13660777/c-reading-the-data-part-of-a-wav-file
 
 // Struct que representa o header dos arquivos .wav
 typedef struct  WAV_HEADER{
@@ -18,18 +27,34 @@ typedef struct  WAV_HEADER{
     unsigned short      bitsPerSample;  // Number of bits per sample
     char                Subchunk2ID[4]; // "data"  string
     unsigned int        Subchunk2Size;  // Sampled data length
-
+    
 } wav_hdr;
 
-typedef struct encodeHeader
-{
-    char encodeType;// 00000DHR (D - Diferença; H - Huffman; R - Runlength)
-    unsigned int runlengthNumBits;
-    unsigned long long totalLength;
+/* Headers abaixo ja estao alinhados de 8 em 8 bytes */
 
-	unsigned short channels;
-	unsigned short bitsPerSample; /* In bits */
-	unsigned long long differenceLength;
+/* Header geral para o arquivo comprimido */
+typedef struct encodeHeader {
+    /* 00000DHR (D - Diferença; H - Huffman; R - Runlength) */
+    unsigned int encodeType;
+    unsigned long long totalLength;
+    unsigned int originalFileSize;
 } enc_hdr;
+
+/******* INCLUIR HEADER DE DIFERENCA *******/
+typedef struct differenceHeader {
+    // TO DO
+} dif_hdr;
+
+/* Header presente no caso de haver codificacao Runlength */
+typedef struct runlengthHeader {
+    unsigned int runlengthNumBits;
+    unsigned int runlengthPadding;
+} run_hdr;
+
+/* Header presente no caso de haver codificacao Huffman */
+typedef struct huffmanHeader {
+    unsigned int huffmanFrequenciesCount;
+    unsigned int huffmanMaxValue;
+} huf_hdr;
 
 #endif
