@@ -3,7 +3,7 @@ CFLAGS=-Wall -g -ansi
 #DEPS = parser.h
 #OBJ = parser-encoder.o parser-decoder.o
 
-all: encode decode
+all: encode decode #test
 
 encode: parser.o zatoencoder.c differential.o List.o utils.h runlength.o huffman.o
 	$(CC) zatoencoder.c parser.o differential.o List.o runlength.o huffman.o -o encode $(CFLAGS)
@@ -36,4 +36,4 @@ runlength: runlength.c List.h utils.h
 # 	$(CC) reader.c -c $(CFLAGS)
 
 clean:
-	rm *.o encode decode test
+	rm *.o encode decode #test
