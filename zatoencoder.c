@@ -63,7 +63,7 @@ char *readData(FILE *input, wav_hdr *header) {
     
     /* Posicao no vetor dataBits */
     int dataBitsPosition = 0;
-   
+    
     /* Quantidade a ser deslocada na operacao bitshift */
     int shift;
     
@@ -138,7 +138,7 @@ int writeEncodingHeader(struct arguments *arguments, unsigned long long int size
     if(fwrite(&encodeHeader, sizeof(enc_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-
+    
     return EXIT_SUCCESS;
 }
 
@@ -192,7 +192,7 @@ int writeHuffmanHeaderAndData(unsigned char huffmanMaxValue, unsigned int *frequ
             fwrite(&frequencyArray[i], sizeof(frequencyArray[i]), 1, output);
         }
     }
-
+    
     return EXIT_SUCCESS;
 }
 
@@ -227,42 +227,42 @@ int writeByteData(FILE *output, char *data, unsigned long long int size) {
     }
     
     free(byteData);
-
+    
     return EXIT_SUCCESS;
 }
 
 /* Funcao de escrita de dados para o arquivo de saida*/
 int writeToOutput(struct arguments *arguments, FILE *output, wav_hdr *header, char *data, unsigned long long int size, unsigned int runlengthNumBits, unsigned int runlengthPadding, unsigned int *frequencyArray, unsigned char huffmanMaxValue, unsigned int fileSize) {
-
+    
     /* 1 e o numero de elementos a serem escritos. 1 WAV header apenas */
     if(fwrite(header, sizeof(wav_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-
+    
     if(writeEncodingHeader(arguments, size, fileSize, output)!= EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
-
+    
     if(arguments->difference) {
         /********* TO DO ********/
     }
-
+    
     if(arguments->runlength) {
         if(writeRunlengthHeader(runlengthNumBits, runlengthPadding, output)!= EXIT_SUCCESS) {
             return EXIT_FAILURE;
         }
     }
-
+    
     if(arguments->huffman) {
         if(writeHuffmanHeaderAndData(huffmanMaxValue, frequencyArray, output)!= EXIT_SUCCESS) {
             return EXIT_FAILURE;
         }
     }
-
+    
     if(writeByteData(output, data, size)!= EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
-
+    
     return EXIT_SUCCESS;
 }
 
@@ -281,7 +281,7 @@ void showCompressionStatistics(FILE* output, unsigned int fileSizeInput) {
     printf("\nTamanho do arquivo original: %u\n", fileSizeInput);
     printf("\nTamanho do arquivo comprimido: %u\n", fileSizeOutput);
     printf("\nTaxa de compressão (espaço reduzido): %.2f%%\n", taxaCompressao);
-
+    
 }
 
 int main(int argc, char **argv) {
@@ -313,10 +313,10 @@ int main(int argc, char **argv) {
     /* Tamanho do vetor de dados apos codificacao Huffman */
     unsigned long long int huffmanSize;
     /* Maior valor codificado na codificacao Huffman */
-    unsigned char huffmanMaxValue;
+    unsigned char huffmanMaxValue = 0;
     /* Vetor de frequencias da codificacao Huffman */
-    unsigned int *frequencyArray;
-
+    unsigned int *frequencyArray = NULL;
+    
     char verbose;
     
     input = NULL;
@@ -324,8 +324,8 @@ int main(int argc, char **argv) {
     runlengthPadding = 0;
     runlengthNumBits = 0;
     
-    /* Caso haja algum erro nos argumentos passados ou a opção --help 
-     * seja selecionada , termina o programa 
+    /* Caso haja algum erro nos argumentos passados ou a opção --help
+     * seja selecionada , termina o programa
      */
     if(!parseArguments(argc, argv, &arguments, 'e')) {
         return 0;
