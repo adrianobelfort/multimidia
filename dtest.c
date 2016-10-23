@@ -743,8 +743,8 @@ void testO()
 	encodedFile = openFile(encodedfilename, "wb");
 
 	diffsheader = buildStaticDifferentialHeader(n, channels, bits);
-	diffheader = buildDifferentialHeader(diffsheader, numberOfBitsPerChannel, NULL);
-	printDifferentialHeader(diffheader);
+	diffheader = buildDifferentialHeader(diffsheader, numberOfBitsPerChannel);
+	//printDifferentialHeader(diffheader);
 	writeDifferentialHeader(diffheader, encodedFile);
 	writeData(byteStream, byteStreamSize, encodedFile);
 
@@ -759,7 +759,7 @@ void testO()
 	filesize = fileSize(encodedFile);
 
 	diffheader = readDifferentialHeader(encodedFile);
-	printDifferentialHeader(diffheader);
+	//printDifferentialHeader(diffheader);
 
 	byteStreamSize = filesize - ftell(encodedFile);
 	byteStream = (char*) calloc(byteStreamSize, sizeof(char));
@@ -770,7 +770,8 @@ void testO()
 	closeFile(encodedFile);
 
 	rebuiltStream = decompressibleDifferentialDecodingWithChannels(differentialStream, differentialStreamSize,
-		numberOfBitsPerChannel, channels, numberOfSamples, bits, &rebuiltStreamSize);
+		diffheader.encodedBitsPerSample, diffheader.sheader.channels, diffheader.sheader.numberOfSamplesPerChannel *
+		diffheader.sheader.channels, diffheader.sheader.originalBitsPerSample, &rebuiltStreamSize);
 
 	printf("REBUILT STREAM SIZE: %llu\n", rebuiltStreamSize);
 
@@ -778,6 +779,8 @@ void testO()
 	printBits(rebuiltStream, rebuiltStreamSize, bits);
 	printf("\n");
 
+	destroyDifferentialHeader(diffheader);
+	free(byteStream);
 	free(originalStream);
 	free(differentialStream);
 	free(rebuiltStream);

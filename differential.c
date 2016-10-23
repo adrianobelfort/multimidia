@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "differential-base.h"
 #include "differential.h"
@@ -864,7 +865,7 @@ short reduceChunk(Chunk* chunk)
 	short newSize;
 
 	newSize = minimumRepresentationSizeInBits(*chunk);
-	printf("New size: %d\n", newSize);
+	//printf("New size: %d\n", newSize);
 
 	for (i = 0; i < chunk->size; i++)
 	{
@@ -959,7 +960,7 @@ Chunk* bitsToChunkArray(char* stream, huge_t size, unsigned short channels, larg
 	return chunks;
 }
 
-char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, int bitsPerSample, unsigned short channels, large_t *numberOfSamples, short* newBitsPerChannel, huge_t* compressedStreamSize)
+/*char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, int bitsPerSample, unsigned short channels, large_t *numberOfSamples, short* newBitsPerChannel, huge_t* compressedStreamSize)
 {
 	Sample *extractedSamples;
 	Chunk *differenceChunks;
@@ -981,6 +982,55 @@ char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, in
 	destroySampleArray(extractedSamples, size / bitsPerSample);
 	destroyChannels(differenceChunks, channels);
 	return encodedStream;
+}*/
+
+char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, int bitsPerSample,
+	unsigned short channels, large_t *numberOfSamples, short* newBitsPerChannel, huge_t* compressedStreamSize)
+{
+	Sample *extractedSamples, *initialSamples;
+	Chunk *differenceChunks, auxiliarChunk;
+	char *encodedStream, *outputStream, *initialSampleStream;
+	unsigned short i;
+	int j;
+
+	*numberOfSamples = size / bitsPerSample;
+
+	initialSamples = (Sample*) malloc(channels * sizeof(Sample));
+
+	extractedSamples = bitsToSampleArray(stream, size, bitsPerSample);
+	differenceChunks = chunkedDifferentialEncodingWithChannels(extractedSamples, *numberOfSamples, channels);
+
+	for (i = 0; i < channels; i++)
+	{
+		/* Isola a primeira amostra do resto */
+		copySample(&initialSamples[i], &differenceChunks[i].samples[0]);
+		initializeChunk(&auxiliarChunk, differenceChunks[i].size - 1);
+		for (j = 0; j < auxiliarChunk.size; j++)
+		{
+			copySample(&auxiliarChunk.samples[j], &differenceChunks[i].samples[j+1]);
+		}
+		destroyChunk(&differenceChunks[i]);
+
+		differenceChunks[i] = auxiliarChunk;
+
+		newBitsPerChannel[i] = reduceChunk(&differenceChunks[i]);
+	}
+
+	initialSampleStream = sampleArrayToBits(initialSamples, channels);
+	encodedStream = chunkArrayToBits(differenceChunks, channels, compressedStreamSize);
+
+	outputStream = (char*) malloc((channels * bitsPerSample + *compressedStreamSize) * sizeof(char));
+	putBits(outputStream, initialSampleStream, channels * bitsPerSample);
+	putBits(outputStream + channels * bitsPerSample, encodedStream, *compressedStreamSize);
+
+	*compressedStreamSize += channels * bitsPerSample;
+
+	destroySampleArray(initialSamples, channels);
+	destroySampleArray(extractedSamples, size / bitsPerSample);
+	destroyChannels(differenceChunks, channels);
+	free(initialSampleStream);
+	free(encodedStream);
+	return outputStream;
 }
 
 huge_t sizeOfChunk(Chunk chunk)
@@ -1015,7 +1065,7 @@ Sample* chunkedDifferentialDecodingWithChannels(Chunk* encodedChunks, unsigned s
 	return combinedDecodedSamples;
 }
 
-char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, short* bitsPerSample,
+/*char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, short* bitsPerSample,
 	unsigned short channels, large_t numberOfSamples, int oldBitsPerSample, huge_t* decompressedStreamSize)
 {
 	Sample *decodedSamples;
@@ -1038,12 +1088,60 @@ char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, 
 	destroySampleArray(decodedSamples, numberOfSamples);
 	destroyChannels(differenceChunks, channels);
 	return extractedStream;
+}*/
+
+char* decompressibleDifferentialDecodingWithChannels(char* stream, huge_t size, short* bitsPerSample,
+	unsigned short channels, large_t numberOfSamples, int oldBitsPerSample, huge_t* decompressedStreamSize)
+{
+	Sample *decodedSamples, *initialSamples;
+	Chunk *differenceChunks;
+	char *extractedStream, *initialSampleStream;
+	unsigned short i;
+	large_t j, numberOfSamplesPerChannel;
+
+	initialSampleStream = (char*) malloc(oldBitsPerSample * channels * sizeof(char));
+	putBits(initialSampleStream, stream, oldBitsPerSample * channels);
+
+	stream = stream + oldBitsPerSample * channels;
+	size = size - oldBitsPerSample * channels;
+
+	numberOfSamplesPerChannel = numberOfSamples/channels;
+
+	initialSamples = bitsToSampleArray(initialSampleStream, oldBitsPerSample * channels, oldBitsPerSample);
+
+	differenceChunks = bitsToChunkArray(stream, size, channels, numberOfSamples - channels, bitsPerSample);
+
+	for (i = 0, *decompressedStreamSize = 0; i < channels; i++)
+	{
+		//printChunk(differenceChunks[i]);
+		expandChunk(&differenceChunks[i], oldBitsPerSample);
+
+		differenceChunks[i].samples = realloc(differenceChunks[i].samples, numberOfSamplesPerChannel * sizeof(Sample));
+		for (j = numberOfSamplesPerChannel - 1; j > 0; j--)
+		{
+			copySample(&differenceChunks[i].samples[j], &differenceChunks[i].samples[j-1]);
+		}
+		copySample(&differenceChunks[i].samples[0], &initialSamples[i]);
+		differenceChunks[i].size += 1;
+
+		*decompressedStreamSize += sizeOfChunk(differenceChunks[i]);
+	}
+
+	decodedSamples = chunkedDifferentialDecodingWithChannels(differenceChunks, channels, &numberOfSamples);
+	extractedStream = sampleArrayToBits(decodedSamples, numberOfSamples);
+
+	free(initialSampleStream);
+	destroySampleArray(decodedSamples, numberOfSamples);
+	destroyChannels(differenceChunks, channels);
+	destroySampleArray(initialSamples, channels);
+	return extractedStream;
 }
 
 StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPerChannel,
 	unsigned short channels, short originalBitsPerSample)
 {
 	StaticDifferentialHeader header;
+	memset(&header, 0, sizeof(header));
 
 	header.numberOfSamplesPerChannel = numberOfSamplesPerChannel;
 	header.channels = channels;
@@ -1052,14 +1150,13 @@ StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPe
 	return header;
 }
 
-DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample,
-	int32_t *initialSamples)
+DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample)
 {
 	DifferentialHeader header;
 
 	header.sheader = preHeader;
 	header.encodedBitsPerSample = encodedBitsPerSample;
-	header.initialSamples = initialSamples;
+	//header.initialSamples = initialSamples;
 
 	return header;
 }
@@ -1089,11 +1186,8 @@ DifferentialHeader readDifferentialHeader(FILE* file)
 
 void writeDifferentialHeader(DifferentialHeader header, FILE* file)
 {
-	short i;
-
 	fwrite(&header.sheader, sizeof(header.sheader), 1, file);
 	fwrite(header.encodedBitsPerSample, sizeof(short), header.sheader.channels, file);
-	//fwrite(header.initialSamples, sizeof(int32_t), header.sheader.channels, file);
 }
 
 void printDifferentialHeader(DifferentialHeader header)
