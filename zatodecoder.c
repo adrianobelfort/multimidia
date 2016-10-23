@@ -93,7 +93,7 @@ run_hdr *readRunlengthHeader(FILE *input, struct arguments *arguments) {
         printf("Runlength Numbits: %u\n", header->runlengthNumBits);
         printf("Runlength Padding: %u\n", header->runlengthPadding);
     }
-
+    
     return header;
 }
 
@@ -265,7 +265,7 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
     if(fwrite(byteData, originalFileSize-sizeof(wav_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-
+    
     free(byteData);
     
     return EXIT_SUCCESS;
@@ -331,7 +331,7 @@ int main(int argc, char **argv) {
     /* Leitura do header WAV e calculo do tamanho do arquivo de entrada */
     header = readHeader(input, &fileSizeInput);
     
-
+    
     encode_header = readEncodeHeader(input, &arguments);
     
     /* Caso nenhuma das tecnicas de codificacao tenha sido passada,
@@ -412,7 +412,16 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     
-    if(encode_header->encodeType & HUFFMAN_MASK) {
+    if(arguments.difference) {
+        free(differenceHeader);
+    }
+    
+    if(arguments.runlength) {
+        free(runlengthHeader);
+    }
+    
+    if(arguments.huffman) {
+        free(huffmanHeader);
         free(frequencyArray);
     }
     
