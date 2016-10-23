@@ -89,14 +89,6 @@ void destroyDifferentialHeader(DifferentialHeader header)
 run_hdr *readRunlengthHeader(FILE *input, struct arguments *arguments) {
     run_hdr* header = (run_hdr *) malloc(sizeof(run_hdr));
 
-    /*long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
-
-    if(arguments->difference) {
-        seekSize += sizeof(dif_hdr);
-    }
-
-    fseek(input, seekSize, SEEK_SET);*/
-
     fread(header, sizeof(run_hdr), 1, input);
 
     if(DEBUG_FLAG) {
@@ -111,18 +103,6 @@ run_hdr *readRunlengthHeader(FILE *input, struct arguments *arguments) {
 huf_hdr *readHuffmanHeader(FILE *input, struct arguments *arguments) {
     huf_hdr* header = (huf_hdr *) malloc(sizeof(huf_hdr));
 
-    /*long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
-
-    if(arguments->difference) {
-        seekSize += sizeof(dif_hdr);
-    }
-
-    if(arguments->runlength) {
-        seekSize += sizeof(run_hdr);
-    }
-
-    fseek(input, seekSize, SEEK_SET);*/
-
     fread(header, sizeof(huf_hdr), 1, input);
 
     if(DEBUG_FLAG) {
@@ -134,21 +114,6 @@ huf_hdr *readHuffmanHeader(FILE *input, struct arguments *arguments) {
 }
 
 char *readData(FILE *input, wav_hdr *header, enc_hdr *encodeHeader, struct arguments *arguments, huf_hdr *huffmanHeader, unsigned int **frequencyArray) {
-
-    /*long int seekSize = sizeof(wav_hdr)+sizeof(enc_hdr);
-
-    if(arguments->difference) {
-        seekSize += sizeof(dif_hdr);
-    }
-
-    if(arguments->runlength) {
-        seekSize += sizeof(run_hdr);
-    }
-
-    if(arguments->huffman) {
-        seekSize += sizeof(huf_hdr);
-    }*/
-
     /* Aloca um vetor de chars, sendo que cada um representa um bit.
      * Por isso o tamanho é Subchunk2Size * BITS_PER_CHAR, já que
      * um char tem um byte.
@@ -305,11 +270,11 @@ int main(int argc, char **argv) {
     /* Ponteiro temporario para vetor de dados apos codificacao Runlength */
     char *runlengthDecoded;
     /* Numero de bits por amostra da codificacao Runlength */
-    unsigned int runlengthNumBits;
+    /*unsigned int runlengthNumBits;*/
     /* Tamanho do vetor de dados apos decodificacao runlength */
     unsigned long long int runlengthBitsSize;
     /* Padding nos dados apos codificacao runlength para que runlengthSize seja multiplo de 8 */
-    unsigned int runlengthPadding;
+    /*unsigned int runlengthPadding;*/
     /* Ponteiro temporario para vetor de dados apos codificacao Huffman */
     char *huffmanDecoded;
     /* Tamanho do vetor de dados apos codificacao Huffman */
@@ -325,8 +290,8 @@ int main(int argc, char **argv) {
 
     input = NULL;
     output = NULL;
-    runlengthPadding = 0;
-    runlengthNumBits = 0;
+    /*runlengthPadding = 0;
+    runlengthNumBits = 0;*/
 
     /* Caso haja algum erro nos argumentos passados ou a opção --help
      * seja selecionada , termina o programa
