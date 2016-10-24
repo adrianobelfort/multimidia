@@ -14,10 +14,10 @@ Henrique de Almeida Machado da Silveira - No. USP 7961089
 Este projeto teve por objetivo desenvolver uma ferramenta de compressão e descompressão
 de áudio digital, utilizando as técnicas de codificação por diferença, codificação por
 carreira (runlength) e codificação Huffman. Dado um arquivo de entrada no formato WAV,
-o programa "encode" é responsável pela compressão do aqruivo original. O programa 
+o programa "encode" é responsável pela compressão do aqruivo original. O programa
 "decode" realiza a descompressão, obtendo um outro arquivo WAV muito próximo ao original
 (algumas pequenas perdas podem acontecer, por exemplo quando o arquivo original possui
-tamanho que o tamanho do header WAV mais o tamanho dos dados, aramazenado no campo 
+tamanho que o tamanho do header WAV mais o tamanho dos dados, aramazenado no campo
 Subchunk2Size do header WAV).
 
 *** COMPILAÇÃO ***
@@ -83,17 +83,16 @@ A descompressão acontece em ordem inversa.
 Essa ordem foi escolhida porque imaginamos que devido à "localidade" das informações em
 um arquivo de áudio, amostras vizinhas seriam semelhantes e assim a codificação por diferenças
 seria uma boa escolha para ser realizada primeiro. Logo após isso, como fizemos a suposição
-de que essas diferenças podem se repetir sucessivamente, a codificação por carreira 
+de que essas diferenças podem se repetir sucessivamente, a codificação por carreira
 (runlength) se tornou uma opção natural. Finalmente, a codificação por Huffman é executada
-realizando a contagem de frequencias dos dados que chegam até ela.
+realizando a contagem de frequências dos dados que chegam até ela.
 
 A performance isolada dessas diferentes técnicas de compressão, para arquivos em geral, como
 os sample1.wav e sample2.wav fornecidos, é a seguinte:
 
 - Codificação por diferenças: a compressão é muito pequena, não havendo melhora significativa
-de tamanho do arquivo
+de tamanho do arquivo mesmo considerando cada canal do áudio separadamente
 - Codificação por carreira (runlength): na maioria dos casos, não há compressão, isto é, o tamanho
 do arquivo aumenta
 - Codificação Huffman: obteve o melhor desempenho, reduzindo o tamanho dos arquivos originais entre
 10% e 20% na média
-
