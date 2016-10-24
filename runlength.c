@@ -101,6 +101,9 @@ char *runlengthEncode(char *data, unsigned long long int size, unsigned int *run
      * adicionada.
      */
     if(currentRun != 0) {
+        if(currentRun > maxRun) {
+            maxRun = currentRun;
+        }
         add(currentRun, runs);
     }
     
