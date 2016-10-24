@@ -129,6 +129,19 @@ char* copyBits(char* bits, int n)
 	return copy;
 }
 
+/*
+ *	Copia n "bits" do vetor source para o vetor destination.
+ */
+void putBits(char* destination, char* source, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+	{
+		destination[i] = source[i];
+	}
+}
+
 /********************** CONVERSÕES E IMPRESSÃO COM BITS **********************/
 
 /*
@@ -302,6 +315,20 @@ void printChunk(Chunk chunk)
 }
 
 /*
+ *	Imprime um conjunto de blocos
+ */
+void printChunkArray(Chunk* chunks, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+	{
+		printf("Channel %d:\n", i+1);
+		printChunk(chunks[i]);
+	}
+}
+
+/*
  *	Converte um número inteiro para um vetor de bits
  */
 char* numberToBits(int32_t number, int bits)
@@ -340,6 +367,91 @@ Sample numberToSample(int32_t number, int bitsPerSample)
 	sample.data = numberToBits(number, bitsPerSample);
 
 	return sample;
+}
+
+/*
+ *	Converte um fluxo de bits para um vetor de amostras considerando a
+ *	taxa de bits por amostra.
+ */
+Sample* bitsToSampleArray(char* stream, int n, int bitsPerSample)
+{
+	int i, numberOfSamples;
+	Sample* samples;
+
+	numberOfSamples = n / bitsPerSample;
+
+	samples = (Sample*) malloc(numberOfSamples * sizeof(Sample));
+
+	for (i = 0; i < numberOfSamples; i++)
+	{
+		samples[i] = bitsToSample(stream + i*bitsPerSample, bitsPerSample);
+	}
+
+	return samples;
+}
+
+/*
+ *	Converte um vetor de blocos em um fluxo de bits.
+ */
+char* chunkArrayToBits(Chunk *chunks, large_t numberOfChunks, huge_t *streamSize)
+{
+	char* stream;
+	huge_t i, j, k, l, size;
+
+	for (i = 0, size = 0; i < numberOfChunks; i++)
+	{
+		size += chunks[i].samples[0].size * chunks[i].size;
+	}
+
+	*streamSize = size;
+
+	stream = (char*) malloc(size * sizeof(char));
+
+	for (i = 0, l = 0; i < numberOfChunks; i++)
+	{
+		for (j = 0; j < chunks[i].size; j++)
+		{
+			for (k = 0; k < chunks[i].samples[j].size; k++, l++)
+			{
+				stream[l] = chunks[i].samples[j].data[k];
+			}
+		}
+	}
+
+	return stream;
+}
+
+/*
+ *	Converte um fluxo de bits para um vetor de blocos considerando vários canais.
+ */
+Chunk* bitsToChunkArray(char* stream, huge_t size, unsigned short channels, large_t numberOfSamples, short *bitsPerSample)
+{
+	Chunk* chunks;
+	unsigned short i;
+	large_t j, numberOfSamplesPerChannel;
+	short k;
+	huge_t l;
+
+	chunks = (Chunk*) malloc(channels * sizeof(Chunk));
+
+	numberOfSamplesPerChannel = numberOfSamples / channels;
+
+	for (i = 0, l = 0; i < channels; i++)
+	{
+		initializeChunk(&chunks[i], numberOfSamplesPerChannel);
+
+		for (j = 0; j < numberOfSamplesPerChannel; j++)
+		{
+			initializeSample(&chunks[i].samples[j], bitsPerSample[i]);
+
+			for (k = 0; k < bitsPerSample[i]; k++, l++)
+			{
+				chunks[i].samples[j].data[k] = stream[l];
+			}
+		}
+	}
+
+	return chunks;
 }
 
 /********************** ARITMÉTICA BOOLEANA **********************/
@@ -406,37 +518,6 @@ int sumOne(char* number, int n)
 	return carry; /* Indica overflow */
 }
 
-/*Sample convertSampleToSigned(Sample sample)
-{
-	int i;
-	Sample convertedSample;
-
-	initializeSample(&convertedSample, sample.size + 1);
-
-	convertedSample.data[0] = (char) 0;
-	for (i = 0; i < sample.size; i++)
-	{
-		convertedSample.data[i+1] = sample.data[i];
-	}
-
-	return convertedSample;
-}
-
-Chunk convertChunkToSigned(Chunk chunk)
-{
-	Chunk convertedChunk;
-	int i;
-
-	initializeChunk(&convertedChunk, chunk.size);
-
-	for (i = 0; i < chunk.size; i++)
-	{
-		convertedChunk.samples[i] = convertSampleToSigned(chunk.samples[i]);
-	}
-
-	return convertedChunk;
-}*/
-
 /*
  *	Realiza a operação de diferença a - b.
  *	Ela é feita se somando a à negação de b + 1
@@ -459,16 +540,6 @@ Sample signedDifference(Sample a, Sample b)
 	free(negatedB);
 	return differenceSample;
 }
-
-/*Sample unsignedDifference(Sample a, Sample b)
-{
-	Sample signedA, signedB;
-
-	signedA = convertSampleToSigned(a);
-	signedB = convertSampleToSigned(b);
-
-	return signedDifference(signedA, signedB);
-}*/
 
 /*
  *	Executa a operação a - b com duas amostras.
@@ -613,6 +684,93 @@ int minimumRepresentationSizeInBits(Chunk chunk)
 	return minimumRepresentation;
 }
 
+/*
+ *	Inverte o endianess in-place de um fluxo de bits.
+ */
+void invertEndianess(char* bitStream, huge_t size, int bitsPerSample)
+{
+	huge_t samples, i, j;
+	char aux;
+
+	samples = size / (huge_t) bitsPerSample;
+
+	for (i = 0; i < samples; i++)
+	{
+		for (j = 0; j < bitsPerSample/2; j++)
+		{
+			aux = bitStream[i*bitsPerSample + j];
+			bitStream[i*bitsPerSample + j] = bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)];
+			bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)] = aux;
+		}
+	}
+}
+
+/*
+ *	Determina o tamanho em bits de um bloco.
+ */
+huge_t sizeOfChunk(Chunk chunk)
+{
+	int i;
+	huge_t size;
+
+	for (i = 0, size = 0; i < chunk.size; i++)
+	{
+		size += chunk.samples[i].size;
+	}
+
+	return size;
+}
+
+/*************** MANIPULAÇÃO DE CANAIS ***************/
+
+/*
+ *	Dada uma sequência de amostras lidas do arquivo, isola os canais
+ *	e os coloca em blocos independentes para processamento
+ *	individual.
+ */
+Chunk* isolateChannels(Sample* samples, int numberOfSamples, int channels)
+{
+	Chunk* chunks;
+	int i;
+
+	chunks = (Chunk*) malloc(channels * sizeof(Chunk));
+	for (i = 0; i < channels; i++)
+	{
+		initializeChunk(&chunks[i], numberOfSamples / channels);
+	}
+
+	for (i = 0; i < numberOfSamples; i++)
+	{
+		copySample(&chunks[i % channels].samples[i / channels], &samples[i]);
+	}
+
+	return chunks;
+}
+
+/*
+ *	Recria o vetor de amostras para gravação em arquivo a partir de
+ *	um conjunto de blocos.
+ */
+Sample* combineChannels(Chunk* channelChunks, int channels)
+{
+	Sample* samples;
+	int i, numberOfSamples = 0;
+
+	for (i = 0; i < channels; i++)
+	{
+		numberOfSamples += channelChunks[i].size;
+	}
+
+	samples = (Sample*) malloc(numberOfSamples * sizeof(Sample));
+
+	for (i = 0; i < numberOfSamples; i++)
+	{
+		copySample(&samples[i], &channelChunks[i % channels].samples[i / channels]);
+	}
+
+	return samples;
+}
+
 /********************** CODIFICAÇÃO **********************/
 
 /*
@@ -669,88 +827,6 @@ char* differentialDecoding(char* stream, int n, int bitsPerSample)
 	destroyChunk(&sumChunk);
 
 	return decodedStream;
-}
-
-/*
- *	Dada uma sequência de amostras lidas do arquivo, isola os canais
- *	e os coloca em blocos independentes para processamento
- *	individual.
- */
-Chunk* isolateChannels(Sample* samples, int numberOfSamples, int channels)
-{
-	Chunk* chunks;
-	int i;
-
-	chunks = (Chunk*) malloc(channels * sizeof(Chunk));
-	for (i = 0; i < channels; i++)
-	{
-		initializeChunk(&chunks[i], numberOfSamples / channels);
-	}
-
-	for (i = 0; i < numberOfSamples; i++)
-	{
-		copySample(&chunks[i % channels].samples[i / channels], &samples[i]);
-	}
-
-	return chunks;
-}
-
-/*
- *	Recria o vetor de amostras para gravação em arquivo a partir de
- *	um conjunto de blocos.
- */
-Sample* combineChannels(Chunk* channelChunks, int channels)
-{
-	Sample* samples;
-	int i, numberOfSamples = 0;
-
-	for (i = 0; i < channels; i++)
-	{
-		numberOfSamples += channelChunks[i].size;
-	}
-
-	samples = (Sample*) malloc(numberOfSamples * sizeof(Sample));
-
-	for (i = 0; i < numberOfSamples; i++)
-	{
-		copySample(&samples[i], &channelChunks[i % channels].samples[i / channels]);
-	}
-
-	return samples;
-}
-
-/*
- *	Converte um fluxo de bits para um vetor de amostras considerando a
- *	taxa de bits por amostra.
- */
-Sample* bitsToSampleArray(char* stream, int n, int bitsPerSample)
-{
-	int i, numberOfSamples;
-	Sample* samples;
-
-	numberOfSamples = n / bitsPerSample;
-
-	samples = (Sample*) malloc(numberOfSamples * sizeof(Sample));
-
-	for (i = 0; i < numberOfSamples; i++)
-	{
-		samples[i] = bitsToSample(stream + i*bitsPerSample, bitsPerSample);
-	}
-
-	return samples;
-}
-
-/*
- *	Copia n "bits" do vetor source para o vetor destination.
- */
-void putBits(char* destination, char* source, int n)
-{
-	int i;
-
-	for (i = 0; i < n; i++)
-	{
-		destination[i] = source[i];
-	}
 }
 
 /*
@@ -904,27 +980,6 @@ char* differentialDecodingWithChannels(char* stream, int n, int channels, int bi
 }
 
 /*
- *	Inverte o endianess in-place de um fluxo de bits.
- */
-void invertEndianess(char* bitStream, huge_t size, int bitsPerSample)
-{
-	huge_t samples, i, j;
-	char aux;
-
-	samples = size / (huge_t) bitsPerSample;
-
-	for (i = 0; i < samples; i++)
-	{
-		for (j = 0; j < bitsPerSample/2; j++)
-		{
-			aux = bitStream[i*bitsPerSample + j];
-			bitStream[i*bitsPerSample + j] = bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)];
-			bitStream[i*bitsPerSample + (bitsPerSample - 1 - j)] = aux;
-		}
-	}
-}
-
-/*
  *	Trunca a amostra para a nova taxa bitsPerSample
  */
 short reduceSample(Sample* sample, short bitsPerSample)
@@ -1030,70 +1085,6 @@ Chunk* chunkedDifferentialEncodingWithChannels(Sample* samples, large_t numberOf
 }
 
 /*
- *	Converte um vetor de blocos em um fluxo de bits.
- */
-char* chunkArrayToBits(Chunk *chunks, large_t numberOfChunks, huge_t *streamSize)
-{
-	char* stream;
-	huge_t i, j, k, l, size;
-
-	for (i = 0, size = 0; i < numberOfChunks; i++)
-	{
-		size += chunks[i].samples[0].size * chunks[i].size;
-	}
-
-	*streamSize = size;
-
-	stream = (char*) malloc(size * sizeof(char));
-
-	for (i = 0, l = 0; i < numberOfChunks; i++)
-	{
-		for (j = 0; j < chunks[i].size; j++)
-		{
-			for (k = 0; k < chunks[i].samples[j].size; k++, l++)
-			{
-				stream[l] = chunks[i].samples[j].data[k];
-			}
-		}
-	}
-
-	return stream;
-}
-
-/*
- *	Converte um fluxo de bits para um vetor de blocos considerando vários canais.
- */
-Chunk* bitsToChunkArray(char* stream, huge_t size, unsigned short channels, large_t numberOfSamples, short *bitsPerSample)
-{
-	Chunk* chunks;
-	unsigned short i;
-	large_t j, numberOfSamplesPerChannel;
-	short k;
-	huge_t l;
-
-	chunks = (Chunk*) malloc(channels * sizeof(Chunk));
-
-	numberOfSamplesPerChannel = numberOfSamples / channels;
-
-	for (i = 0, l = 0; i < channels; i++)
-	{
-		initializeChunk(&chunks[i], numberOfSamplesPerChannel);
-
-		for (j = 0; j < numberOfSamplesPerChannel; j++)
-		{
-			initializeSample(&chunks[i].samples[j], bitsPerSample[i]);
-
-			for (k = 0; k < bitsPerSample[i]; k++, l++)
-			{
-				chunks[i].samples[j].data[k] = stream[l];
-			}
-		}
-	}
-
-	return chunks;
-}
-
-/*
  *	Aplica a codificação por diferenças utilizando vários canais e truncando
  *	os blocos resultantes para a menor representação possível, permitindo uma
  *	compressão dos dados.
@@ -1150,22 +1141,6 @@ char* compressibleDifferentialEncodingWithChannels(char* stream, huge_t size, in
 	free(initialSampleStream);
 	free(encodedStream);
 	return outputStream;
-}
-
-/*
- *	Determina o tamanho em bits de um bloco.
- */
-huge_t sizeOfChunk(Chunk chunk)
-{
-	int i;
-	huge_t size;
-
-	for (i = 0, size = 0; i < chunk.size; i++)
-	{
-		size += chunk.samples[i].size;
-	}
-
-	return size;
 }
 
 /*
