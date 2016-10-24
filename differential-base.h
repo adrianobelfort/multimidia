@@ -35,10 +35,6 @@ void copySample(Sample *destination, Sample *source);
 
 void destroySample(Sample* sample);
 
-Sample* newSample(int bitsPerSample);
-
-void killSample(Sample* sample);
-
 void destroySampleArray(Sample* samples, int n);
 
 short reduceSample(Sample* sample, short bitsPerSample);
@@ -54,10 +50,6 @@ void populateChunk(Chunk* chunk, Sample* samples);
 void copyChunk(Chunk *destination, Chunk* source);
 
 void destroyChunk(Chunk* chunk);
-
-Chunk* newChunk(int capacity);
-
-void killChunk(Chunk* chunk);
 
 void destroyChannels(Chunk* chunks, int channels);
 
@@ -158,20 +150,5 @@ Chunk* chunkedDifferentialEncodingWithChannels(Sample* samples, large_t numberOf
 
 Sample* chunkedDifferentialDecodingWithChannels(Chunk* encodedChunks, unsigned short channels,
 	large_t *numberOfSamples);
-
-/*********************** MANIPULAÇÃO DE CABEÇALHO ***********************/
-
-/* StaticDifferentialHeader buildStaticDifferentialHeader(large_t numberOfSamplesPerChannel,
-	unsigned short channels, short originalBitsPerSample);
-
-DifferentialHeader buildDifferentialHeader(StaticDifferentialHeader preHeader, short *encodedBitsPerSample);
-
-void destroyDifferentialHeader(DifferentialHeader header);
-
-DifferentialHeader readDifferentialHeader(FILE* file); REMOVE
-
-void writeDifferentialHeader(DifferentialHeader header, FILE* file);  REMOVE
-
-void printDifferentialHeader(DifferentialHeader header); */
 
 #endif
