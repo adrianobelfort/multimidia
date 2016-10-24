@@ -236,6 +236,10 @@ int writeToOutput(FILE *output, wav_hdr *header, char *data, unsigned long long 
         /* Isola o bit do byte e atribui a posicao do vetor dataBits */
         currByte |= data[i] << shift;
     }
+    
+    if(j != byteDataSize) {
+        byteData[j] = currByte;
+    }
 
     if(fwrite(byteData, originalFileSize-sizeof(wav_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;

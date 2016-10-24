@@ -243,36 +243,42 @@ int writeHuffmanHeaderAndData(unsigned char huffmanMaxValue, unsigned int *frequ
 
 /* Escreve os dados comprimidos no arquivo de saida */
 int writeByteData(FILE *output, char *data, unsigned long long int size) {
-
-    char *byteData = (char *) malloc(size/BITS_PER_CHAR * sizeof(char));
+    
+    unsigned char *byteData = (unsigned char *) malloc(size/BITS_PER_CHAR * sizeof(unsigned char));
+    
     unsigned long long int i, j = 0;
-    char currByte = 0;
+    unsigned char currByte = 0;
     int currBit = 0;
     int shift;
-
+    
     for(i = 0; i < size/BITS_PER_CHAR; i++) {
         byteData[i] = 0;
     }
-
+    
     for(i = 0; i < size; i++) {
         if(currBit == BITS_PER_CHAR) {
             currBit = 0;
             byteData[j++] = currByte;
             currByte = 0;
         }
-
+        
         shift = BITS_PER_CHAR - 1 - currBit++;
-
+        
         /* Isola o bit do byte e atribui a posicao do vetor dataBits */
         currByte |= data[i] << shift;
     }
-
+    
+    if(j != size/BITS_PER_CHAR) {
+        byteData[j] = currByte;
+    }
+    
     if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-
+    
+    
     free(byteData);
-
+    
     return EXIT_SUCCESS;
 }
 
