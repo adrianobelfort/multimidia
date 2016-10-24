@@ -140,39 +140,44 @@ int openFiles(FILE **input, FILE **output, char *inputName, char *outputName) {
 
 /* Escreve o header geral de compressao no arquivo de saida */
 int writeEncodingHeader(struct arguments *arguments, unsigned long long int size, unsigned int fileSize, FILE *output) {
-
+    
     enc_hdr encodeHeader;
-	memset(&encodeHeader, 0, sizeof(encodeHeader));
-
+    
     encodeHeader.encodeType = 0;
-
+    
     if(arguments->runlength) {
         encodeHeader.encodeType |= RUNLENGTH_MASK;
     }
-
+    
     if(arguments->huffman) {
         encodeHeader.encodeType |= HUFFMAN_MASK;
     }
-
+    
     if(arguments->difference) {
         encodeHeader.encodeType |= DIFFERENCE_MASK;
     }
-
+    
     encodeHeader.totalLength = size/BITS_PER_CHAR;
-
+    encodeHeader.fillingBits = 0;
+    
+    if(size % BITS_PER_CHAR != 0) {
+        encodeHeader.totalLength++;
+        encodeHeader.fillingBits = BITS_PER_CHAR - (size % BITS_PER_CHAR);
+    }
+    
     encodeHeader.originalFileSize = fileSize;
-
+    
     if(DEBUG_FLAG) {
         printf("Encode Mode: %u\n", encodeHeader.encodeType);
         printf("TotalLength: %llu\n", encodeHeader.totalLength);
         printf("Original File Size: %u\n", encodeHeader.originalFileSize);
     }
-
+    
     /* 1 e o numero de elementos a serem escritos. 1 encode header apenas */
     if(fwrite(&encodeHeader, sizeof(enc_hdr), 1, output)!= 1) {
         return EXIT_FAILURE;
     }
-
+    
     return EXIT_SUCCESS;
 }
 
@@ -244,14 +249,18 @@ int writeHuffmanHeaderAndData(unsigned char huffmanMaxValue, unsigned int *frequ
 /* Escreve os dados comprimidos no arquivo de saida */
 int writeByteData(FILE *output, char *data, unsigned long long int size) {
     
-    unsigned char *byteData = (unsigned char *) malloc(size/BITS_PER_CHAR * sizeof(unsigned char));
+    unsigned long long byteDataLength = size / BITS_PER_CHAR;
+    if(size % BITS_PER_CHAR != 0) {
+        byteDataLength++;
+    }
+    unsigned char *byteData = (unsigned char *) malloc(byteDataLength * sizeof(unsigned char));
     
     unsigned long long int i, j = 0;
     unsigned char currByte = 0;
     int currBit = 0;
     int shift;
     
-    for(i = 0; i < size/BITS_PER_CHAR; i++) {
+    for(i = 0; i < byteDataLength; i++) {
         byteData[i] = 0;
     }
     
@@ -268,11 +277,11 @@ int writeByteData(FILE *output, char *data, unsigned long long int size) {
         currByte |= data[i] << shift;
     }
     
-    if(j != size/BITS_PER_CHAR) {
+    if(j != byteDataLength) {
         byteData[j] = currByte;
     }
     
-    if(fwrite(byteData, size/BITS_PER_CHAR, 1, output)!= 1) {
+    if(fwrite(byteData, byteDataLength, 1, output)!= 1) {
         return EXIT_FAILURE;
     }
     

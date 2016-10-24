@@ -255,6 +255,9 @@ char *huffmanEncode(char *data, unsigned long long int size, unsigned int bitsPe
         aux = aux->next;
     }
     
+    if(*huffmanSize == 0)
+        *huffmanSize = 1;
+    
     /* Cria o vetor que armazenara os dados codificados em Huffman. */
     char *huffmanData = (char *) malloc(*huffmanSize * sizeof(char));
     
@@ -301,7 +304,7 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
     /* A arvore e percorrida de acordo com os bits sendo lidos. Quando chega-se a um
      * no folha, utiliza-se o valor armazenado nele e armazena-se tal valor em uma lista.
      */
-    while(i < size) {
+    while(i <= size) {
         
         if(aux->left || aux->right) {
             
@@ -319,6 +322,9 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
             (*huffmanSize) += BITS_PER_CHAR;
             test += BITS_PER_CHAR;
             aux = tree;
+            if(i == size || size == 1) {
+                break;
+            }
         }
     }
     
@@ -331,7 +337,7 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
     char * huffmanDecoded = (char *) malloc(*huffmanSize * sizeof(char));
     
     Node *it = values->head;
-
+    
     /* A lista criada com os valores e percorrida e os valors vao sendo escritos
      * no stream por meio de sua representacao binaria
      */
@@ -343,7 +349,7 @@ char *huffmanDecode(char *data, unsigned long long int size, unsigned int huffma
         if(value != 0){
             
             while(value && numBits) {
-               
+                
                 huffmanDecoded[j + --numBits] = value % 2;
                 value = value/2;
             }

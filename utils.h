@@ -32,7 +32,7 @@ typedef struct  WAV_HEADER{
     unsigned short      bitsPerSample;  /* Number of bits per sample */
     char                Subchunk2ID[4]; /* "data"  string */
     unsigned int        Subchunk2Size;  /* Sampled data length */
-
+    
 } wav_hdr;
 
 /* Headers abaixo ja estao alinhados de 8 em 8 bytes */
@@ -43,20 +43,21 @@ typedef struct encodeHeader {
     unsigned int encodeType;
     unsigned long long totalLength;
     unsigned int originalFileSize;
+    unsigned long int fillingBits;
 } enc_hdr;
 
 /* Headers estático e dinâmico para codificação por diferenças*/
 typedef struct
 {
-	large_t numberOfSamplesPerChannel;
-	unsigned short channels;
-	short originalBitsPerSample;
+    large_t numberOfSamplesPerChannel;
+    unsigned short channels;
+    short originalBitsPerSample;
 } StaticDifferentialHeader;
 
 typedef struct
 {
-	StaticDifferentialHeader sheader;
-	short *encodedBitsPerSample;
+    StaticDifferentialHeader sheader;
+    short *encodedBitsPerSample;
 } DifferentialHeader;
 
 /* Header presente no caso de haver codificacao Runlength */

@@ -118,24 +118,21 @@ char *readData(FILE *input, wav_hdr *header, enc_hdr *encodeHeader, struct argum
      * Por isso o tamanho é Subchunk2Size * BITS_PER_CHAR, já que
      * um char tem um byte.
      */
-    char *dataBits = (char *) malloc(encodeHeader->totalLength * BITS_PER_CHAR);
-
+    char *dataBits = (char *) malloc(encodeHeader->totalLength * BITS_PER_CHAR - encodeHeader->fillingBits);
+    
     /* Vetor dos bytes lidos originalmente do arquivo */
     char *originalData = (char *) malloc(encodeHeader->totalLength);
-
-    /* Prepara o offset para leitura dos dados do arquivo, pulando os headers */
-    /*fseek(input, seekSize, SEEK_SET);*/
-
+    
     /* Le o vetor de frequencias para o caso de codificacao Huffman*/
     if(arguments->huffman) {
         unsigned int index, value;
         unsigned int * fArray = (unsigned int *) malloc((huffmanHeader->huffmanMaxValue+1) * sizeof(unsigned int));
         unsigned int i;
-
+        
         for(i = 0; i < huffmanHeader->huffmanMaxValue+1; i++) {
             fArray[i] = 0;
         }
-
+        
         for(i = 0; i < huffmanHeader->huffmanFrequenciesCount; i++) {
             fread(&index, sizeof(unsigned int), 1, input);
             fread(&value, sizeof(unsigned int), 1, input);
@@ -146,39 +143,47 @@ char *readData(FILE *input, wav_hdr *header, enc_hdr *encodeHeader, struct argum
         }
         *frequencyArray = fArray;
     }
-
+    
     /* Le os dados comprimidos */
     fread(originalData, encodeHeader->totalLength, 1, input);
-
+    
     /* Mascara utilizada para isolar bits */
     char mask = 0x1;
-
+    
     unsigned long long int i;
-
+    
     /* Atual posicao do bit dentro de um byte */
     int currentBitPosition;
-
+    
     /* Posicao no vetor dataBits */
     int dataBitsPosition = 0;
-
+    
     /* Quantidade a ser deslocada na operacao bitshift */
     int shift;
-
+    
+    /* Numero de bits que devem ser processados nesse byte */
+    int bitLimit = BITS_PER_CHAR;
+    
     /* Para todos os bytes lidos do arquivo */
     for(i = 0; i < encodeHeader->totalLength; i++) {
+        
+        if(i == encodeHeader->totalLength -1) {
+            bitLimit = (int) (BITS_PER_CHAR-encodeHeader->fillingBits);
+        }
+        
         /* Seleciona o byte atual */
         char currValue = originalData[i];
         /* Inicializa a posicao de bit no byte atual */
         currentBitPosition = 0;
         /* Para todos os bits no byte */
-        while(currentBitPosition < BITS_PER_CHAR) {
+        while(currentBitPosition < bitLimit) {
             /* Calcula o shift que deve ser feito */
             shift = BITS_PER_CHAR - 1 - currentBitPosition++;
             /* Isola o bit do byte e atribui a posicao do vetor dataBits */
             dataBits[dataBitsPosition++] = (currValue & (mask << shift)) >> shift;
         }
     }
-
+    
     free(originalData);
     return dataBits;
 }
@@ -355,7 +360,7 @@ int main(int argc, char **argv) {
     /* Inicializa dataBitsSize e dataBits com os valores lidos a partir
      * do arquivo de entrada
      */
-    dataBitsSize = encode_header->totalLength * BITS_PER_CHAR;
+    dataBitsSize = encode_header->totalLength * BITS_PER_CHAR - encode_header->fillingBits;
 
     dataBits = readData(input, header, encode_header, &arguments, huffmanHeader, &frequencyArray);
 
