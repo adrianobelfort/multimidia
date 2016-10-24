@@ -200,6 +200,11 @@ char *runlengthDecode(char *data, unsigned long long int size, unsigned int numB
         currValue |= data[i] << shift;
     }
     
+    if(j != numberSamples) {
+        *totalBitsLength += currValue;
+        runlengthSamples[j] = currValue;
+    }
+    
     /* O stream de saida e criado ao converter as carreiras para sua representacao
      * binaria
      */
